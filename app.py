@@ -1,10 +1,48 @@
+"""
+Raport Czasu Pracy i Pracy Twórczej - Streamlit Dashboard
+
+Przetwarza raporty z Jiry (hierarchiczna struktura Level 0/1/2) i worklogs,
+oblicza Creative Score oraz eksportuje dane.
+"""
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime
-import re
-import io
+
+from helpers import (
+    parse_time_to_hours,
+    hours_to_hm_format,
+    extract_creative_percentage,
+    fix_polish_encoding,
+    apply_encoding_fix_to_dataframe,
+    get_top_task_per_person,
+    format_display_table,
+    calculate_creative_summary,
+    get_dynamic_creative_filter_options,
+    validate_data_structure,
+    generate_executive_summary,
+)
+from export_utils import (
+    export_to_csv,
+    export_to_excel,
+    export_worklogs_to_csv,
+    export_worklogs_to_excel,
+)
+from config import (
+    MAX_FILE_SIZE_MB,
+    LARGE_FILE_WARNING_MB,
+    TABLE_HEADERS_WITH_EMOJI,
+    TABLE_HEADERS_PLAIN,
+    DAY_NAMES_PL,
+    DAY_ORDER,
+    CHART_MIN_HEIGHT,
+    CHART_ROW_HEIGHT,
+)
+
+# =============================================================================
+# KONFIGURACJA STREAMLIT
+# =============================================================================
 
 st.set_page_config(
     page_title="Raport Czasu Pracy",
@@ -14,126 +52,14 @@ st.set_page_config(
 )
 
 
-def parse_time_to_hours(time_str):
-    """Konwertuje czas w formacie HH:MM na godziny (float)"""
-    if pd.isna(time_str) or time_str == "":
-        return 0.0
-
-    try:
-        if ":" in str(time_str):
-            hours, minutes = map(int, str(time_str).split(":"))
-            return hours + minutes / 60
-        else:
-            return float(time_str)
-    except Exception:
-        return 0.0
-
-
-def hours_to_hm_format(hours):
-    """Konwertuje godziny (float) na format HH:MM"""
-    if pd.isna(hours) or hours == 0:
-        return "0:00"
-
-    total_minutes = int(hours * 60)
-    h = total_minutes // 60
-    m = total_minutes % 60
-    return f"{h}:{m:02d}"
-
-
-def extract_creative_percentage(text):
-    """Wyciąga procent pracy twórczej z tekstu"""
-    if pd.isna(text):
-        return None
-
-    text_str = str(text).strip()
-
-    # Sprawdź czy to "brak danych"
-    if (
-        text_str == ""
-        or "No Procent" in text_str
-        or "Brak danych" in text_str
-        or text_str.lower() == "none"
-        or text_str.lower() == "nan"
-    ):
-        return None
-
-    # Spróbuj konwertować bezpośrednio (jeśli jest sama liczba)
-    try:
-        value = float(text_str)
-        if 0 <= value <= 100:
-            return int(value)
-    except ValueError:
-        pass
-
-    # Szuka liczby w tekście (może być sama liczba lub z %)
-    match = re.search(r"(\d+(?:\.\d+)?)", text_str)
-    if match:
-        try:
-            value = float(match.group(1))
-            if 0 <= value <= 100:
-                return int(value)
-        except ValueError:
-            pass
-
-    return None
-
-
-def validate_data_structure(df):
-    """Waliduje strukturę danych i zwraca listę problemów"""
-    issues = []
-    warnings = []
-
-    # Sprawdź wymagane kolumny
-    required_cols = ["Level", "Users / Issues / Procent pracy twórczej"]
-    missing_cols = [col for col in required_cols if col not in df.columns]
-    if missing_cols:
-        issues.append(f"Brakujące kolumny: {', '.join(missing_cols)}")
-        return issues, warnings  # Krytyczny błąd, nie kontynuuj
-
-    # Sprawdź czy są dane
-    if df.empty:
-        issues.append("Plik jest pusty")
-        return issues, warnings
-
-    # Sprawdź poziomy
-    unique_levels = df["Level"].dropna().unique()
-    if 0 not in unique_levels:
-        warnings.append("Brak poziomu 0 (użytkownicy) - może być problem ze strukturą")
-    if 1 not in unique_levels:
-        warnings.append("Brak poziomu 1 (zadania) - brak danych do analizy")
-
-    # Sprawdź duplikaty użytkowników (Level 0)
-    users = df[df["Level"] == 0]["Users / Issues / Procent pracy twórczej"].dropna()
-    duplicates = users[users.duplicated()].unique()
-    if len(duplicates) > 0:
-        warnings.append(
-            f"Wykryto duplikaty użytkowników: {', '.join(duplicates[:3])}"
-            + (f" i {len(duplicates)-3} więcej" if len(duplicates) > 3 else "")
-        )
-
-    # Sprawdź czy są czasy pracy
-    if "Total Time Spent" in df.columns:
-        time_data = df[df["Level"] == 1]["Total Time Spent"].dropna()
-        if len(time_data) == 0:
-            warnings.append("Brak danych czasu pracy (Total Time Spent)")
-    else:
-        warnings.append(
-            "Brak kolumny 'Total Time Spent' - nie będzie można obliczyć czasu pracy"
-        )
-
-    # Sprawdź procenty twórczości
-    creative_data = df[df["Level"] == 2][
-        "Users / Issues / Procent pracy twórczej"
-    ].dropna()
-    if len(creative_data) == 0:
-        warnings.append("Brak danych o procentach pracy twórczej (Level 2)")
-
-    return issues, warnings
+# =============================================================================
+# PRZETWARZANIE DANYCH (CACHED)
+# =============================================================================
 
 
 @st.cache_data(show_spinner=False)
-def process_excel_data(df):
-    """Przetwarza dane z Excel do struktury raportu"""
+def process_excel_data(df: pd.DataFrame) -> pd.DataFrame:
+    """Przetwarza dane z Excel do struktury raportu (Level 0/1/2)."""
     report_data = []
     current_user = None
     current_task = None
@@ -157,9 +83,7 @@ def process_excel_data(df):
                 "creative_hours": 0.0,
             }
             report_data.append(current_task)
-        elif (
-            level == 2 and current_task is not None and pd.notna(description)
-        ):  # Procent pracy twórczej
+        elif level == 2 and current_task is not None and pd.notna(description):
             creative_percent = extract_creative_percentage(description)
             if creative_percent is not None:
                 current_task["creative_percent"] = creative_percent
@@ -169,7 +93,6 @@ def process_excel_data(df):
 
     df_result = pd.DataFrame(report_data)
 
-    # Upewnij się, że typy kolumn są poprawne
     if not df_result.empty:
         df_result["time_hours"] = df_result["time_hours"].astype(float)
         df_result["creative_hours"] = df_result["creative_hours"].astype(float)
@@ -181,48 +104,22 @@ def process_excel_data(df):
 
 
 @st.cache_data(show_spinner=False)
-def process_worklogs_data(df):
-    """Przetwarza dane z worklogs (płaski format z datami)"""
-    # Kopiuj DataFrame aby nie modyfikować cache'a
+def process_worklogs_data(df: pd.DataFrame) -> pd.DataFrame:
+    """Przetwarza dane z worklogs (płaski format z datami)."""
     df_work = df.copy()
 
-    # Konwertuj Start Date na datetime
     df_work["Start Date"] = pd.to_datetime(df_work["Start Date"], errors="coerce")
-
-    # Konwertuj Time Spent na godziny
-    def time_to_hours(time_str):
-        if pd.isna(time_str):
-            return 0.0
-        time_str = str(time_str).strip()
-        # Format np. "03:00" lub "3h" lub "180m"
-        if ":" in time_str:
-            parts = time_str.split(":")
-            try:
-                hours = int(parts[0])
-                minutes = int(parts[1]) if len(parts) > 1 else 0
-                return hours + minutes / 60
-            except Exception:
-                return 0.0
-        return 0.0
-
-    df_work["time_hours"] = df_work["Time Spent"].apply(time_to_hours)
-
-    # Konwertuj Procent pracy twórczej
+    df_work["time_hours"] = df_work["Time Spent"].apply(parse_time_to_hours)
     df_work["creative_percent"] = df_work["Procent pracy twórczej"].apply(
-        lambda x: extract_creative_percentage(x)
+        extract_creative_percentage
     )
-
-    # Oblicz godziny twórcze
     df_work["creative_hours"] = (
         df_work["creative_percent"].fillna(0) / 100 * df_work["time_hours"]
     )
 
-    # Standardowe nazwy kolumn
     df_work["person"] = df_work["Author"]
     df_work["task"] = df_work["Issue Summary"]
     df_work["key"] = df_work["Issue Key"]
-
-    # Dodaj miesiąc (bez to_period - unika PeriodArray timezone warning)
     df_work["month_str"] = df_work["Start Date"].dt.strftime("%Y-%m")
 
     return df_work[
