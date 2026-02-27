@@ -1526,17 +1526,10 @@ def generate_personalized_insight(
 ) -> str:
     """
     Generuje personalizowany insight dla pracownika na podstawie rozkładu kategorii.
-
-    Args:
-        categories_breakdown: Dict z rozkladem godzin per kategoria
-        total_hours: Łączne godziny pracownika
-        creative_percent_avg: Średni % twórczości
-
-    Returns:
-        String z personalizowanym insightem i radą
+    Analizuje kombinacje TOP 3 i BOTTOM 3 kategorii do wygenerowania dopasowanych rad.
     """
     if not categories_breakdown or total_hours == 0:
-        return "📊 Brak wystarczających danych do generowania insights."
+        return "📊 Brak wystarczających danych do generowania analizy."
 
     # Sortuj kategorie po godzinach
     categories_sorted = sorted(
@@ -1545,91 +1538,166 @@ def generate_personalized_insight(
         reverse=True
     )
 
-    # Kategoria z największą ilością godzin
-    max_category = categories_sorted[0][0]
-    max_hours = categories_sorted[0][1]["hours"]
-    max_percent = (max_hours / total_hours * 100) if total_hours > 0 else 0
+    # Top 3 kategorie
+    top_3 = categories_sorted[:3]
+    top_3_text = "🔝 **Trzy główne obszary zaangażowania:**\n"
+    for i, (cat, data) in enumerate(top_3, 1):
+        percent = (data["hours"] / total_hours * 100) if total_hours > 0 else 0
+        top_3_text += f"{i}. **{cat}** — {data['hours']:.1f}h ({percent:.0f}%)\n"
 
-    # Kategoria z najmniejszą ilością godzin (jeśli >0)
-    min_category = None
-    min_hours = 0
-    min_percent = 0
-    for cat, data in reversed(categories_sorted):
-        if data["hours"] > 0:
-            min_category = cat
-            min_hours = data["hours"]
-            min_percent = (min_hours / total_hours * 100) if total_hours > 0 else 0
-            break
+    # Bottom 3 kategorie (tylko te > 0 godzin)
+    bottom_3 = [item for item in reversed(categories_sorted) if item[1]["hours"] > 0][:3]
+    bottom_3_text = ""
+    if bottom_3:
+        bottom_3_text = "\n📉 **Trzy obszary o najmniejszym zaangażowaniu:**\n"
+        for i, (cat, data) in enumerate(bottom_3, 1):
+            percent = (data["hours"] / total_hours * 100) if total_hours > 0 else 0
+            bottom_3_text += f"{i}. **{cat}** — {data['hours']:.1f}h ({percent:.1f}%)\n"
 
-    # Porady zależne od kategorii
-    advice_map = {
-        "Bug/Hotfix": (
-            "🐛 **Rada:** Dużo czasu na bug fixy mogą wskazywać na problemy w kodzie lub testing. "
-            "Rozważ inwestycję w code review, testy i preventywne działania.",
-            "Mimo dużego zaangażowania w bug fixy, staraj się również planować czas na nowe features."
-        ),
-        "Code Review": (
-            "👀 **Rada:** Code review to kluczowe dla jakości zespołu! Doskonale, że inwestujesz czas w kontrolę kodu.",
-            "Staraj się równoważyć code review z własnymi implementacjami."
-        ),
-        "Testing": (
-            "✅ **Rada:** Testy to najlepsza inwestycja w długoterm. Testowanie zapobiega problemom i zmniejsza tech debt.",
-            "Przeanalizuj czy testy mogą być zautomatyzowane, aby zaoszczędzić czas."
-        ),
-        "Development/Implementacja": (
-            "💻 **Rada:** Większość czasu na development to naturalne. Pamiętaj o poświęceniu czasu na design i code review.",
-            "Staraj się nie zapominać o dokumentacji i planowaniu przed implementacją."
-        ),
-        "Analiza/Design": (
-            "📐 **Rada:** Dobrze zaplanowany design to fundament. Inwestycja w analizę oszczędza czas implementacji.",
-            "Upewnij się, że wiedza z analiz jest udokumentowana dla całego zespołu."
-        ),
-        "DevOps/Infrastruktura": (
-            "🔧 **Rada:** Infrastruktura wymaga uwagi. Spróbuj zautomatyzować powtarzalne zadania (skrypty, CI/CD).",
-            "Udostępnij wiedzę o infrastrukturze reszcie zespołu."
-        ),
-        "Szkolenia/Uczenie": (
-            "📚 **Rada:** Inwestycja w uczenie się to super! To gwarantuje długoterm rozwój i nowsze kompetencje.",
-            "Staraj się dzielić wiedzą ze zespołem - wspólne uczenie podnosi level całej grupy."
-        ),
-        "Administracja/Support": (
-            "🏢 **Rada:** Support i administracja mogą pochłaniać dużo czasu. Spróbuj zautomatyzować procesy.",
-            "Szukaj sposobów aby zmniejszyć powtarzalne zadania admin."
-        ),
-        "Spotkania/Sesje": (
-            "📞 **Rada:** Wiele spotkań może ograniczać czas na rzeczywistą pracę. "
-            "Przeanalizuj czy wszystkie są potrzebne lub czy mogą być krótsze.",
-            "Staraj się być produktywnym w spotkaniach - konkretne decyzje zamiast długich dyskusji."
-        ),
-    }
+    # Nazwy kategorii do analizy profilu
+    top_names = [cat for cat, _ in top_3]
+    bottom_names = [cat for cat, _ in bottom_3]
 
-    # Buduj główny insight
-    insight_text = f"📊 **Profil pracownika:** Spędzasz dużo czasu na **{max_category}** ({max_percent:.0f}% godzin)"
+    # Buduj insight
+    insight_text = top_3_text + bottom_3_text
 
-    if min_category:
-        insight_text += f", ale mało na **{min_category}** ({min_percent:.1f}% godzin).\n\n"
-    else:
-        insight_text += ".\n\n"
+    # Generuj rady na podstawie profilu
+    profile_advice = _generate_profile_advice(top_names, bottom_names, total_hours, categories_breakdown)
+    insight_text += "\n" + profile_advice
 
-    # Dodaj poradę
-    if max_category in advice_map:
-        main_advice, secondary_advice = advice_map[max_category]
-        insight_text += main_advice
-
-        # Dodaj rad o najmniejszej kategorii jeśli istnieje
-        if min_category and min_category in advice_map:
-            _, min_secondary = advice_map[min_category]
-            insight_text += f"\n\n🎯 **Dodatkowe:** {min_secondary}"
-    else:
-        insight_text += f"🎯 **Rada:** Zastanów się nad balansem między {max_category} a innymi obowiązkami."
-
-    # Dodaj info o twórczości
+    # Dodaj informacje o twórczości
     if creative_percent_avg is not None:
         if creative_percent_avg >= 70:
-            insight_text += f"\n\n✨ **Twórczość:** Świetnie! {creative_percent_avg:.0f}% Twojego czasu to rzeczywista praca twórcza. To wysoki poziom!"
+            insight_text += f"\n\n✨ **Twórczość:** Doskonale! {creative_percent_avg:.0f}% czasu to rzeczywista praca twórcza. To bardzo wysoki poziom zaangażowania w innowacyjne działania."
         elif creative_percent_avg >= 50:
-            insight_text += f"\n\n✨ **Twórczość:** Solidnie! {creative_percent_avg:.0f}% czasu to praca twórcza. Możesz spróbować podnieść ten procent."
+            insight_text += f"\n\n✨ **Twórczość:** Solidnie! {creative_percent_avg:.0f}% czasu to praca twórcza. Możesz spróbować podnieść ten procent poprzez więcej czasu na projektowanie i innowacje."
         else:
-            insight_text += f"\n\n✨ **Twórczość:** {creative_percent_avg:.0f}% - spróbuj dedykować więcej czasu na rzeczywisty development i kreatywne rozwiązania."
+            insight_text += f"\n\n✨ **Twórczość:** {creative_percent_avg:.0f}% — spróbuj poświęcić więcej czasu na rzeczywisty program i twórcze rozwiązania zamiast pracy reaktywnej."
 
     return insight_text
+
+
+def _generate_profile_advice(
+    top_names: list,
+    bottom_names: list,
+    total_hours: float,
+    categories_breakdown: Dict[str, Dict[str, float]]
+) -> str:
+    """
+    Generuje rady na podstawie profilu pracownika — kombinacji TOP 3 i BOTTOM 3 kategorii.
+    Dostosowuje rekomendacje do rzeczywistego rozkładu obowiązków.
+    """
+    top_set = set(top_names)
+    bottom_set = set(bottom_names)
+
+    # Zdefiniuj grupy kategorii
+    reactive_categories = {"Spotkania/Sesje", "Bug/Hotfix", "Administracja/Support"}
+    proactive_categories = {"Development/Implementacja", "Analiza/Design", "Testing", "Szkolenia/Uczenie"}
+    quality_categories = {"Code Review", "Testing"}
+    infrastructure_categories = {"DevOps/Infrastruktura"}
+
+    reactive_in_top = len(top_set & reactive_categories)
+    proactive_in_top = len(top_set & proactive_categories)
+    quality_in_top = len(top_set & quality_categories)
+
+    advice = "**📋 Rekomendacje na podstawie Twojego profilu:**\n"
+
+    # --- Profil 1: Zbyt dużo pracy reaktywnej ---
+    if reactive_in_top >= 2:
+        advice += (
+            "\n🔴 **Uwaga na pracę reaktywną:** Twój czas zdominowany jest przez reactive work "
+            "(spotkania, naprawy, wsparcie). To może utrudniać zaplanowaną, wysokojakościową pracę. "
+            "➜ **Porada:** Zaplanuj bloki czasu na pracę skupioną (deep work) bez przeszkód.\n"
+        )
+    # --- Profil 2: Świetna struktura pracy ---
+    elif proactive_in_top >= 2 and quality_in_top >= 1:
+        advice += (
+            "\n🟢 **Doskonała struktura:** Znaczna część czasu poświęcona na konstruktywną pracę "
+            "(programowanie, analizę, testy). To świadczy o dobrym podejściu do jakości. "
+            "➜ **Porada:** Utrzymaj tę równowagę!\n"
+        )
+    # --- Profil 3: Czysty development ---
+    elif "Development/Implementacja" in top_names and "Testing" not in top_set:
+        advice += (
+            "\n🚀 **Silnie skupiony na programowaniu:** Dużo czasu na implementację, "
+            "ale mało na testy. ➜ **Porada:** Zvększ udział testów — to zapewnie stabilność kodu "
+            "i zmniejszy problemy w produkcji.\n"
+        )
+
+    # --- Profil 4: Dużo spotkań ---
+    if "Spotkania/Sesje" in top_names:
+        meeting_hours = categories_breakdown.get("Spotkania/Sesje", {}).get("hours", 0)
+        meeting_percent = (meeting_hours / total_hours * 100) if total_hours > 0 else 0
+        if meeting_percent > 20:
+            advice += (
+                f"\n📞 **Zbyt wiele spotkań ({meeting_percent:.0f}%):** Spotkania pochłaniają znaczną część dnia. "
+                "➜ **Porada:** Oceń każde spotkanie — które są rzeczywiście niezbędne? Rozważ asynchroniczną komunikację (Slack, dokumentacja).\n"
+            )
+        elif meeting_percent > 15:
+            advice += (
+                f"\n📞 **Liczba spotkań ({meeting_percent:.0f}%):** Spotkania pełnią ważną rolę. "
+                "➜ **Porada:** Staraj się być efektywnym — przygotuj się wcześniej, konkretne decyzje zamiast dyskusji.\n"
+            )
+
+    # --- Profil 5: Nauka zaniedbana ---
+    if "Szkolenia/Uczenie" in bottom_set:
+        advice += (
+            "\n📚 **Brak inwestycji w rozwój:** Praktycznie nigdy nie masz czasu na szkolenia i eksperymentowanie. "
+            "➜ **Porada:** Zaplanuj regularnie czas na naukę (minimum 4-5% czasu). To gwarantuje długoterminowy wzrost umiejętności.\n"
+        )
+    elif "Szkolenia/Uczenie" in top_names:
+        advice += (
+            "\n📚 **Świetny sposób na rozwój:** Regularnie poświęcasz czas na uczenie się. To zapewnia Ci przewagę konkurencyjną.\n"
+        )
+
+    # --- Profil 6: Testing zaniedbany ---
+    if "Testing" in bottom_set and "Development/Implementacja" in top_set:
+        advice += (
+            "\n⚠️ **Mało testów przy dużym programowaniu:** Ryzyk0 — szybko naprawiasz, ale mało testów. "
+            "➜ **Porada:** Zautomatyzuj testy jednostkowe i integracyjne. To oszczędzi czas na długoterminę.\n"
+        )
+    elif "Testing" not in bottom_set and "Testing" in top_names:
+        advice += (
+            "\n✅ **Zapewniasz wysoką jakość:** Znaczący udział testów — świetne podejście do niezawodności.\n"
+        )
+
+    # --- Profil 7: Code Review ---
+    if "Code Review" in bottom_set:
+        advice += (
+            "\n👀 **Brak przeglądów kodu:** Pracujesz głównie samochłonnie. "
+            "➜ **Porada:** Zwiększ czas na przeglądy kodu kolegów — to zapewnia dzielenie wiedzy i wychwytuje problemy wcześnie.\n"
+        )
+    elif "Code Review" in top_names:
+        advice += (
+            "\n👀 **Aktywnie wspierasz zespół:** Przeglądy kodu to Twoja siła — wspierasz jakość i dzielisz wiedzę.\n"
+        )
+
+    # --- Profil 8: DevOps zaniedbany ---
+    if "DevOps/Infrastruktura" in bottom_set:
+        advice += (
+            "\n🔧 **Brak czasu na infrastrukturę:** DevOps łatwo schodzi na plan drugi. "
+            "➜ **Porada:** Zaplanuj czas na automatyzację deploymentów i monitoring — to ułatwi przyszłą pracę i zmniejszy problemy.\n"
+        )
+
+    # --- Profil 9: Administracja minimalna ---
+    if "Administracja/Support" in bottom_set:
+        advice += (
+            "\n✅ **Fokus na deliverables:** Minimalizujesz pracę administracyjną i skupiasz się na wartości. "
+            "➜ **Porada:** Upewnij się, że to nie oznacza zaniedbań — czasem support jest kluczowy.\n"
+        )
+
+    # --- Profil 10: Kilka reaktywnych, kilka proaktywnych ---
+    if reactive_in_top == 1 and proactive_in_top >= 1:
+        advice += (
+            "\n⚖️ **Dobrze zbilansowany profil:** Łączysz pracę reaktywną i proaktywną. "
+            "➜ **Porada:** Utrzymuj tę równowagę — obie są potrzebne zespołowi.\n"
+        )
+
+    # --- Fallback: ogólne wskazówki ---
+    if advice.count("\n") <= 1:  # Tylko nagłówek
+        advice += (
+            "\n💡 **Profil wyjątkowy:** Twoja dystrybucja czasu jest unikalna. "
+            "Rozważ, czy odpowiada potrzebom projektu i możliwościom zespołu.\n"
+        )
+
+    return advice.rstrip() + "\n"
