@@ -4,7 +4,9 @@ Aplikacja webowa do analizy czasu pracy i procentu pracy twórczej na podstawie 
 
 ## ✨ Funkcjonalności
 
-- **Worklogs** (główne źródło) - analiza szczegółowych logów pracy z datami, autorami, typami zadań
+- **Dashboard** (główny pulpit) - Executive Summary, ranking Creative Score, analizy zespołowe
+- **Worklogs** - analiza szczegółowych logów pracy z datami, autorami, typami zadań
+- **Personal Dashboard** - analiza indywidualna z kalkulatorem wynagrodzeń i kosztów per zadanie/kategoria
 - **Agregacja danych** - automatyczne podsumowanie per osoba/zadanie bez utraty informacji
 - **Creative Score** - wskaźnik łączący czas pracy z poziomem kreatywności
 - **Analizy per miesiąc** - timeline, rozkład tygodniowy, statystyki
@@ -44,8 +46,7 @@ bash setup.sh
 Skrypt automatycznie:
 - ✅ Sprawdza czy Python 3.10+ jest zainstalowany
 - ✅ Tworzy wirtualne środowisko
-- ✅ Uaktualnia pip
-- ✅ Instaluje wszystkie zależności
+- ✅ Instaluje wszystkie zależności z requirements.txt
 - ✅ Testuje importy
 - ✅ Wyświetla instrukcję uruchomienia aplikacji
 
@@ -149,7 +150,66 @@ Dla porównania danych. Struktura:
 - **Level 1** - zadanie z kluczem Jira i czasem pracy (format HH:MM)
 - **Level 2** - procent pracy twórczej (0-100)
 
-## 🧮 Jak działa aplikacja
+## 💰 Personal Dashboard
+
+Dedykowana zakładka do analizy pracy indywidualnej z kalkulatorem wynagrodzeń:
+
+### Funkcje
+
+- **Selektor użytkownika** - wybór osoby z listy
+- **Filtr miesiąca** - analiza konkretnego miesiąca lub całego okresu
+- **Metryki główne:**
+  - Liczba zadań
+  - Łączne godziny pracy
+  - Godziny pracy twórczej
+  - Średnia twórczość
+  - Creative Score
+
+- **Kalkulator kosztów:**
+  - Wgranie wynagrodzenia brutto (PLN)
+  - Konfigurowalne godziny robocze (domyślnie 168h/miesiąc = 21 dni × 8h)
+  - Automatyczne obliczenie stawki godzinowej
+
+- **Metryki kosztów:**
+  - Koszt całkowity czasu pracy
+  - Wartość pracy twórczej
+  - **Najbardziej kosztowne zadanie** - task z największym udziałem w koszcie
+  - **Najmniej kosztowne zadanie** - task z najmniejszym udziałem
+
+- **Rozkład per kategoria zadań:**
+  - Tabela kosztów per kategoria (Bug/Hotfix, Code Review, Testing, Development/Implementacja, itd.)
+  - Wykres kosztów per kategoria
+  - Top 10 zadań wg Creative Score
+
+### Logika kalkulacji kosztów
+
+**Dla konkretnego miesiąca:**
+- Koszt całkowity = pełne wynagrodzenie miesięczne
+- Koszty per kategoria = proporcjonalne do udziału godzin w wynagrodzeniu
+- Przykład: 16,000 PLN wynagrodzenia, 100h w miesiącu, 40h dla kategorii Development → koszt Development = (40/100) × 16,000 = 6,400 PLN
+
+**Dla "Wszystkie" miesiące:**
+- Koszt całkowity = łączne godziny × stawka godzinowa
+- Koszty per kategoria = godziny kategorii × stawka godzinowa
+- Przykład: 250h łącznie, 100 PLN/h, 40h Development → koszt Development = 40 × 100 = 4,000 PLN
+
+### Kategorie zadań
+
+Personal Dashboard automatycznie kategoryzuje zadania na podstawie słów kluczowych w nazwie:
+
+| Kategoria | Słowa kluczowe |
+|-----------|---|
+| **Bug/Hotfix** | bug, hotfix, crash, błąd, error, napr, fix |
+| **Code Review** | review, pull request, pr, code review |
+| **Testing** | test, qa, validation, testy, testowani |
+| **Development/Implementacja** | feature, implement, develop, build, kod, funkcj, endpoint |
+| **Analiza/Design** | analiz, design, diagram, dokumentuj, architektur, research |
+| **DevOps/Infrastruktura** | deploy, ci/cd, pipeline, docker, kubernetes, infra |
+| **Szkolenia/Uczenie** | szkoleni, training, workshop, webinar, kurs |
+| **Administracja/Support** | administraj, support, incident, help, wsparci |
+| **Spotkania/Sesje** | meeting, standup, retro, planning, scrum |
+
+
 
 ```
 1. Wgraj Worklogs (.xlsx)
@@ -177,6 +237,13 @@ Dla porównania danych. Struktura:
 - **Creative Score** = godziny twórcze × (procent twórczości / 100)
   - Nagradza HIGH TIME + HIGH CREATIVITY
   - Przykład: 9h twórczych × (90/100) = 8.1 score
+
+- **Stawka godzinowa** = wynagrodzenie brutto / godziny robocze
+  - Przykład: 16,000 PLN / 168h = 95.24 PLN/h
+
+- **Koszt zadania/kategorii**
+  - Dla konkretnego miesiąca: (godziny / total_hours) × wynagrodzenie brutto
+  - Dla "Wszystkie": godziny × stawka godzinowa
 
 ## 📊 Eksport danych
 
@@ -210,9 +277,21 @@ Dla porównania danych. Struktura:
 ### Funkcje kluczowe
 
 ```python
+# Przetwarzanie danych
 process_worklogs_data()           # Zaladuj i przetwórz worklogs
 aggregate_worklogs_to_report()    # Agreguj per (person, key)
 process_excel_data()              # Zaladuj stary format Level 0/1/2
+
+# Executive Summary
+generate_executive_summary()      # Generuj raport wykonawczy
+_add_category_insights()          # Insights per kategoria zadań
+
+# Personal Dashboard
+generate_personal_stats()         # Oblicz statystyki dla uzytkownika
+render_personal_dashboard()       # Renderuj UI Personal Dashboard
+_categorize_personal_tasks()      # Kategoryzuj zadania uzytkownika
+
+# Eksport
 export_to_csv()                   # Export do CSV
 export_to_excel()                 # Export do Excel 2-arkuszowy
 ```
