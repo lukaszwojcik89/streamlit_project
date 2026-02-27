@@ -138,18 +138,17 @@ def process_worklogs_data(df: pd.DataFrame) -> pd.DataFrame:
 
 @st.cache_data(show_spinner=False)
 def aggregate_worklogs_to_report(df_worklogs: pd.DataFrame) -> pd.DataFrame:
-    """Agreguje worklogs do postaci raportu głównego (bez dat)."""
-    # Group by Issue Key i Task
+    """Agreguje worklogs do postaci raportu głównego (per person + key)."""
+    # Group by PERSON + TASK - każda osoba ma osobny wpis dla każdego zadania
     agg_dict = {
         "time_hours": "sum",
         "creative_hours": "sum",
-        "creative_percent": "first",  # Bierz pierwszy % (zwykle stały)
-        "person": lambda x: x.iloc[0] if len(x) > 0 else "",  # First author
+        "creative_percent": lambda x: x.iloc[0] if len(x) > 0 else None,  # Bierz pierwszy %
     }
     
-    df_agg = df_worklogs.groupby(["key"], as_index=False).agg(agg_dict)
+    df_agg = df_worklogs.groupby(["person", "key"], as_index=False).agg(agg_dict)
     
-    # Ponieważ groupby po key usuwa task, musimy go przyłożyć
+    # Dodaj task (nie ma go po groupby)
     task_mapping = df_worklogs.groupby("key")["task"].first()
     df_agg["task"] = df_agg["key"].map(task_mapping)
     
