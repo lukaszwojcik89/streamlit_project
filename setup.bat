@@ -23,7 +23,19 @@ REM Create venv
 echo.
 echo 2️⃣ Tworzę wirtualne środowisko...
 if exist .venv (
-    echo ✅ Folder .venv już istnieje. Pomijam tworzenie...
+    if exist .venv\Scripts\python.exe (
+        echo ✅ Folder .venv już istnieje. Pomijam tworzenie...
+    ) else (
+        echo ⚠️  Folder .venv istnieje, ale brak plików Pythona. Tworzę od nowa...
+        rmdir /s /q .venv >nul 2>&1
+        python -m venv .venv
+        if errorlevel 1 (
+            echo ❌ Błąd przy tworzeniu środowiska
+            pause
+            exit /b 1
+        )
+        echo ✅ Środowisko wirtualne utworzone
+    )
 ) else (
     python -m venv .venv
     if errorlevel 1 (
