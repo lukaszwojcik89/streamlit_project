@@ -84,7 +84,7 @@ echo "✅ Zależności zainstalowane"
 # Test imports
 echo ""
 echo "6️⃣ Testuję importy..."
-python3 -c "import streamlit, pandas, plotly, openpyxl; print('✅ Wszystko OK!')" 2>/dev/null || {
+python -c "import streamlit, pandas, plotly, openpyxl; print('✅ Wszystko OK!')" 2>/dev/null || {
     echo "❌ Błąd przy importach. Spróbuj uruchomić ponownie."
     exit 1
 }
