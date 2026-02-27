@@ -1310,43 +1310,74 @@ def render_personal_dashboard(df: pd.DataFrame):
             total_cost = stats["total_hours"] * hourly_rate
             creative_cost = stats["creative_hours"] * hourly_rate
         
-        # Analiza najbardziej i najmniej kosztownych zadań
-        most_expensive_task = None
-        least_expensive_task = None
+        # Analiza najwartościowszych i najmniej wartościowych zadań
+        most_valuable_task = None
+        least_valuable_task = None
         
         if not df_filtered.empty and stats["total_hours"] > 0:
-            tasks_with_cost = df_filtered.copy()
+            tasks_with_value = df_filtered.copy()
             
             # Oblicz koszt dla każdego zadania
             if selected_month != "Wszystkie":
-                # Dla konkretnego miesiąca: proporcjonalnie do udziału godzin
-                tasks_with_cost["task_cost"] = (tasks_with_cost["time_hours"] / stats["total_hours"]) * brutto_salary
+                tasks_with_value["task_cost"] = (tasks_with_value["time_hours"] / stats["total_hours"]) * brutto_salary
             else:
-                # Dla wszystkich miesięcy: godziny × stawka
-                tasks_with_cost["task_cost"] = tasks_with_cost["time_hours"] * hourly_rate
+                tasks_with_value["task_cost"] = tasks_with_value["time_hours"] * hourly_rate
             
-            # Filtruj zadania z czasem > 0
-            valid_tasks = tasks_with_cost[tasks_with_cost["time_hours"] > 0].copy()
+            # Oblicz creative score (wartość twórcza)
+            tasks_with_value["task_score"] = (
+                tasks_with_value["creative_hours"] * 
+                tasks_with_value["creative_percent"] / 100
+            )
             
-            if not valid_tasks.empty:
-                # Najbardziej kosztowne zadanie
-                most_expensive_idx = valid_tasks["task_cost"].idxmax()
-                most_expensive_task = {
-                    "task": valid_tasks.loc[most_expensive_idx, "task"],
-                    "key": valid_tasks.loc[most_expensive_idx, "key"] if "key" in valid_tasks.columns else "—",
-                    "hours": valid_tasks.loc[most_expensive_idx, "time_hours"],
-                    "creative_percent": valid_tasks.loc[most_expensive_idx, "creative_percent"] if "creative_percent" in valid_tasks.columns else 0,
-                    "cost": valid_tasks.loc[most_expensive_idx, "task_cost"]
-                }
+            # Filtruj zadania z danymi o twórczości (creative_percent > 0)
+            valuable_tasks = tasks_with_value[
+                (tasks_with_value["creative_percent"].notna()) & 
+                (tasks_with_value["creative_percent"] > 0)
+            ].copy()
+            
+            # Jeśli brak zadań z twórczością, szukaj w zadaniach z czasem > 0
+            if valuable_tasks.empty:
+                valuable_tasks = tasks_with_value[tasks_with_value["time_hours"] > 0].copy()
+                use_score = False
+            else:
+                use_score = True
+            
+            if not valuable_tasks.empty:
+                # Najwartościowsze zadanie (najwyższy creative score)
+                if use_score:
+                    most_valuable_idx = valuable_tasks["task_score"].idxmax()
+                    most_valuable_task = {
+                        "task": valuable_tasks.loc[most_valuable_idx, "task"],
+                        "key": valuable_tasks.loc[most_valuable_idx, "key"] if "key" in valuable_tasks.columns else "—",
+                        "hours": valuable_tasks.loc[most_valuable_idx, "time_hours"],
+                        "creative_percent": valuable_tasks.loc[most_valuable_idx, "creative_percent"],
+                        "cost": valuable_tasks.loc[most_valuable_idx, "task_cost"],
+                        "score": valuable_tasks.loc[most_valuable_idx, "task_score"]
+                    }
+                else:
+                    most_valuable_idx = valuable_tasks["task_cost"].idxmax()
+                    most_valuable_task = {
+                        "task": valuable_tasks.loc[most_valuable_idx, "task"],
+                        "key": valuable_tasks.loc[most_valuable_idx, "key"] if "key" in valuable_tasks.columns else "—",
+                        "hours": valuable_tasks.loc[most_valuable_idx, "time_hours"],
+                        "creative_percent": valid_tasks.loc[most_valuable_idx, "creative_percent"] if "creative_percent" in valuable_tasks.columns else 0,
+                        "cost": valuable_tasks.loc[most_valuable_idx, "task_cost"],
+                        "score": 0
+                    }
                 
-                # Najmniej kosztowne zadanie (najmniejszy koszt)
-                least_expensive_idx = valid_tasks["task_cost"].idxmin()
-                least_expensive_task = {
-                    "task": valid_tasks.loc[least_expensive_idx, "task"],
-                    "key": valid_tasks.loc[least_expensive_idx, "key"] if "key" in valid_tasks.columns else "—",
-                    "hours": valid_tasks.loc[least_expensive_idx, "time_hours"],
-                    "creative_percent": valid_tasks.loc[least_expensive_idx, "creative_percent"] if "creative_percent" in valid_tasks.columns else 0,
-                    "cost": valid_tasks.loc[least_expensive_idx, "task_cost"]
+                # Najmniej wartościowe zadanie (najniższy creative score)
+                if use_score:
+                    least_valuable_idx = valuable_tasks["task_score"].idxmin()
+                else:
+                    least_valuable_idx = valuable_tasks["task_cost"].idxmin()
+                    
+                least_valuable_task = {
+                    "task": valuable_tasks.loc[least_valuable_idx, "task"],
+                    "key": valuable_tasks.loc[least_valuable_idx, "key"] if "key" in valuable_tasks.columns else "—",
+                    "hours": valuable_tasks.loc[least_valuable_idx, "time_hours"],
+                    "creative_percent": valuable_tasks.loc[least_valuable_idx, "creative_percent"] if "creative_percent" in valuable_tasks.columns else 0,
+                    "cost": valuable_tasks.loc[least_valuable_idx, "task_cost"],
+                    "score": valuable_tasks.loc[least_valuable_idx, "task_score"] if use_score else 0
                 }
         
         # Info o okresie
@@ -1389,38 +1420,54 @@ def render_personal_dashboard(df: pd.DataFrame):
         
         st.markdown("---")
         
-        # Najbardziej i najmniej kosztowne zadanie
-        if most_expensive_task or least_expensive_task:
-            st.markdown("### 🎯 Analiza kosztów zadań")
+        # Najbardziej i najmniej wartościowe zadanie
+        if most_valuable_task or least_valuable_task:
+            st.markdown("### 🎯 Analiza wartości zadań")
             
             col_exp, col_cheap = st.columns(2)
             
             with col_exp:
-                if most_expensive_task:
-                    st.markdown("#### 💎 Najbardziej kosztowne")
-                    st.markdown(f"**{most_expensive_task['task']}**")
-                    st.caption(f"🔑 {most_expensive_task['key']}")
-                    st.metric(
-                        label="Koszt zadania",
-                        value=f"{most_expensive_task['cost']:,.2f} PLN"
-                    )
+                if most_valuable_task:
+                    st.markdown("#### 💎 Najbardziej wartościowe")
+                    st.markdown(f"**{most_valuable_task['task']}**")
+                    st.caption(f"🔑 {most_valuable_task['key']}")
+                    
+                    if most_valuable_task['score'] > 0:
+                        st.metric(
+                            label="Creative Score",
+                            value=f"{most_valuable_task['score']:.2f}"
+                        )
+                    else:
+                        st.metric(
+                            label="Koszt zadania",
+                            value=f"{most_valuable_task['cost']:,.2f} PLN"
+                        )
+                    
                     st.caption(
-                        f"⏱️ Czas: {most_expensive_task['hours']:.1f}h | "
-                        f"🎨 Twórczość: {most_expensive_task['creative_percent']:.0f}%"
+                        f"⏱️ Czas: {most_valuable_task['hours']:.1f}h | "
+                        f"🎨 Twórczość: {most_valuable_task['creative_percent']:.0f}%"
                     )
             
             with col_cheap:
-                if least_expensive_task:
-                    st.markdown("#### 💸 Najmniej kosztowne")
-                    st.markdown(f"**{least_expensive_task['task']}**")
-                    st.caption(f"🔑 {least_expensive_task['key']}")
-                    st.metric(
-                        label="Koszt zadania",
-                        value=f"{least_expensive_task['cost']:,.2f} PLN"
-                    )
+                if least_valuable_task:
+                    st.markdown("#### 📉 Najmniej wartościowe")
+                    st.markdown(f"**{least_valuable_task['task']}**")
+                    st.caption(f"🔑 {least_valuable_task['key']}")
+                    
+                    if least_valuable_task['score'] > 0:
+                        st.metric(
+                            label="Creative Score",
+                            value=f"{least_valuable_task['score']:.2f}"
+                        )
+                    else:
+                        st.metric(
+                            label="Koszt zadania",
+                            value=f"{least_valuable_task['cost']:,.2f} PLN"
+                        )
+                    
                     st.caption(
-                        f"⏱️ Czas: {least_expensive_task['hours']:.1f}h | "
-                        f"🎨 Twórczość: {least_expensive_task['creative_percent']:.0f}%"
+                        f"⏱️ Czas: {least_valuable_task['hours']:.1f}h | "
+                        f"🎨 Twórczość: {least_valuable_task['creative_percent']:.0f}%"
                     )
         
         st.markdown("---")
