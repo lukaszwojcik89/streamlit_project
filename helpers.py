@@ -221,6 +221,10 @@ def get_top_task_per_person(df: pd.DataFrame) -> pd.DataFrame:
                 / 100
             )
             best_task = creative_data.nlargest(1, "score").iloc[0]
+            total_score = person_total_scores[person]
+            contribution_pct = (
+                (best_task["score"] / total_score * 100) if total_score > 0 else 0.0
+            )
             most_creative_tasks.append(
                 {
                     "person": best_task["person"],
@@ -230,7 +234,8 @@ def get_top_task_per_person(df: pd.DataFrame) -> pd.DataFrame:
                     "creative_percent": best_task["creative_percent"],
                     "creative_hours": best_task["creative_hours"],
                     "score": best_task["score"],
-                    "total_score": person_total_scores[person],
+                    "total_score": total_score,
+                    "contribution_pct": contribution_pct,
                     "has_creative_data": True,
                 }
             )
@@ -247,6 +252,7 @@ def get_top_task_per_person(df: pd.DataFrame) -> pd.DataFrame:
                     "creative_hours": best_task.get("creative_hours", 0),
                     "score": 0.0,
                     "total_score": person_total_scores[person],
+                    "contribution_pct": 0.0,
                     "has_creative_data": False,
                 }
             )
@@ -496,6 +502,10 @@ def generate_executive_summary(df: pd.DataFrame) -> Dict[str, Any]:
         "data_coverage": 0.0,
         "avg_creative_percent": None,
         "total_creative_hours": 0.0,
+        "total_hours": 0.0,
+        "avg_task_hours": 0.0,
+        "creative_hours_ratio": 0.0,
+        "data_gap_pct": 0.0,
         "people_without_data": [],
         "productivity_table": None,
         "efficiency_table": None,
@@ -524,8 +534,13 @@ def generate_executive_summary(df: pd.DataFrame) -> Dict[str, Any]:
     # Pokrycie danymi
     total_tasks = len(df)
     tasks_with_data = df["creative_percent"].notna().sum()
+    summary["total_hours"] = df["time_hours"].sum()
     summary["data_coverage"] = (
         (tasks_with_data / total_tasks * 100) if total_tasks > 0 else 0
+    )
+    summary["data_gap_pct"] = 100 - summary["data_coverage"]
+    summary["avg_task_hours"] = (
+        summary["total_hours"] / total_tasks if total_tasks > 0 else 0
     )
 
     # Średni % twórczości - ważony godzinami per osoba
@@ -548,6 +563,10 @@ def generate_executive_summary(df: pd.DataFrame) -> Dict[str, Any]:
 
     # Łączne godziny twórcze
     summary["total_creative_hours"] = df["creative_hours"].sum()
+    if summary["total_hours"] > 0:
+        summary["creative_hours_ratio"] = (
+            summary["total_creative_hours"] / summary["total_hours"] * 100
+        )
 
     # Osoby bez danych o twórczości
     people_with_data = set(df[df["creative_percent"].notna()]["person"].unique())
@@ -1303,6 +1322,12 @@ def generate_personal_stats(df: pd.DataFrame, person_name: str) -> Dict[str, Any
         "creative_percent_avg": None,
         "num_tasks": 0,
         "creative_score": 0.0,
+        "avg_task_hours": 0.0,
+        "data_coverage": 0.0,
+        "creative_percent_std": None,
+        "focus_index": 0.0,
+        "non_creative_hours": 0.0,
+        "non_creative_ratio": 0.0,
         "top_tasks_df": None,
         "categories_breakdown": {},
     }
@@ -1317,6 +1342,15 @@ def generate_personal_stats(df: pd.DataFrame, person_name: str) -> Dict[str, Any
     stats["total_hours"] = person_df["time_hours"].sum()
     stats["creative_hours"] = person_df["creative_hours"].sum()
     stats["num_tasks"] = len(person_df)
+    stats["avg_task_hours"] = (
+        stats["total_hours"] / stats["num_tasks"] if stats["num_tasks"] > 0 else 0
+    )
+    stats["non_creative_hours"] = stats["total_hours"] - stats["creative_hours"]
+    stats["non_creative_ratio"] = (
+        stats["non_creative_hours"] / stats["total_hours"] * 100
+        if stats["total_hours"] > 0
+        else 0
+    )
 
     # Średni % twórczości (ważony godzinami)
     person_creative = person_df[person_df["creative_percent"].notna()]
@@ -1327,6 +1361,15 @@ def generate_personal_stats(df: pd.DataFrame, person_name: str) -> Dict[str, Any
                 person_creative["creative_percent"] * person_creative["time_hours"]
             ).sum() / total_creative_task_hours
             stats["creative_percent_avg"] = weighted_avg
+            variance = (
+                person_creative["time_hours"]
+                * (person_creative["creative_percent"] - weighted_avg) ** 2
+            ).sum() / total_creative_task_hours
+            stats["creative_percent_std"] = variance ** 0.5
+    tasks_with_data = person_df["creative_percent"].notna().sum()
+    stats["data_coverage"] = (
+        tasks_with_data / stats["num_tasks"] * 100 if stats["num_tasks"] > 0 else 0
+    )
 
     # Creative Score
     if not person_creative.empty:
@@ -1356,6 +1399,11 @@ def generate_personal_stats(df: pd.DataFrame, person_name: str) -> Dict[str, Any
             ]
         ].copy()
         stats["top_tasks_df"] = top_tasks
+
+        top3_hours = top_tasks["time_hours"].head(3).sum()
+        stats["focus_index"] = (
+            top3_hours / stats["total_hours"] * 100 if stats["total_hours"] > 0 else 0
+        )
 
     # Kategorie zadań (jeśli kolumna task istnieje)
     if "task" in person_df.columns:
