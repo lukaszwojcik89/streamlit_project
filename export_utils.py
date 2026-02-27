@@ -271,38 +271,55 @@ def export_to_excel(
         worksheet.freeze_panes = "A2"
         worksheet.auto_filter.ref = f"A1:{chr(65 + len(export_df.columns) - 1)}{len(export_df) + 1}"
 
-        # Arkusz 2: Podsumowanie
+        # Arkusz 2: Podsumowanie (z formułami)
         summary_data = df_summary.reset_index() if df_summary.index.name else df_summary.copy()
-        summary_data.to_excel(writer, sheet_name=sheet_name_summary, index=False)
-
-        worksheet_summary = writer.sheets[sheet_name_summary]
-
+        
+        worksheet_summary = writer.book.create_sheet(sheet_name_summary)
+        
         # Szerokości kolumn podsumowania
         summary_widths = {
-            "A": 25,  # Osoba / index
-            "B": 18,
-            "C": 18,
-            "D": 18,
-            "E": 18,
+            "A": 25,  # Osoba
+            "B": 18,  # Łączne godziny
+            "C": 18,  # Godziny twórcze
+            "D": 18,  # % Pracy twórczej
+            "E": 18,  # Pokrycie danymi
         }
         set_column_widths(worksheet_summary, summary_widths)
-        format_worksheet_headers(worksheet_summary, styles, len(summary_data.columns))
-
-        # Formatuj dane podsumowania
-        for row_num in range(2, len(summary_data) + 2):
-            for col_num in range(1, len(summary_data.columns) + 1):
-                cell = worksheet_summary.cell(row=row_num, column=col_num)
+        
+        # Nagłówki
+        for col_idx, col_name in enumerate(summary_data.columns, start=1):
+            cell = worksheet_summary.cell(row=1, column=col_idx, value=col_name)
+            cell.font = styles.header_font
+            cell.fill = styles.header_fill
+            cell.alignment = styles.header_alignment
+            cell.border = styles.thin_border
+        
+        # Dane z formułami
+        for row_idx, (_, row_data) in enumerate(summary_data.iterrows(), start=2):
+            for col_idx, col_name in enumerate(summary_data.columns, start=1):
+                cell = worksheet_summary.cell(row=row_idx, column=col_idx)
                 cell.font = styles.data_font
                 cell.border = styles.thin_border
-
-                if col_num == 1:  # Osoba
+                
+                if col_idx == 1:  # Osoba
+                    cell.value = row_data.iloc[0]
                     cell.alignment = styles.data_alignment_left
-                else:  # Liczby
+                elif col_idx == 2:  # Łączne godziny
+                    cell.value = row_data.iloc[1]
+                    cell.number_format = "0.0"
                     cell.alignment = styles.data_alignment_right
-                    if col_num in [2, 3]:  # Godziny
-                        cell.number_format = "0.00"
-                    else:  # Procenty
-                        cell.number_format = "0.0"
+                elif col_idx == 3:  # Godziny twórcze
+                    cell.value = row_data.iloc[2]
+                    cell.number_format = "0.0"
+                    cell.alignment = styles.data_alignment_right
+                elif col_idx == 4:  # % Pracy twórczej - FORMUŁA
+                    cell.value = f"=C{row_idx}/B{row_idx}*100"
+                    cell.number_format = "0.0"
+                    cell.alignment = styles.data_alignment_right
+                elif col_idx == 5:  # Pokrycie danymi
+                    cell.value = row_data.iloc[4]
+                    cell.number_format = "0"
+                    cell.alignment = styles.data_alignment_right
 
         worksheet_summary.freeze_panes = "A2"
 
@@ -388,28 +405,52 @@ def export_worklogs_to_excel(
         worksheet.freeze_panes = "A2"
         worksheet.auto_filter.ref = f"A1:{chr(65 + len(export_df.columns) - 1)}{len(export_df) + 1}"
 
-        # Arkusz 2: Podsumowanie
-        summary_df.to_excel(writer, sheet_name="Podsumowanie", index=False)
-        worksheet_summary = writer.sheets["Podsumowanie"]
+        # Arkusz 2: Podsumowanie (z formułami)
+        worksheet_summary = writer.book.create_sheet("Podsumowanie")
 
-        summary_widths = {"A": 25, "B": 18, "C": 18, "D": 18, "E": 18}
+        summary_widths = {
+            "A": 25,  # Osoba
+            "B": 18,  # Łączne godziny
+            "C": 18,  # Godziny twórcze
+            "D": 18,  # % Pracy twórczej
+            "E": 18,  # Pokrycie danymi
+        }
         set_column_widths(worksheet_summary, summary_widths)
-        format_worksheet_headers(worksheet_summary, styles, len(summary_df.columns))
-
-        for row_num in range(2, len(summary_df) + 2):
-            for col_num in range(1, len(summary_df.columns) + 1):
-                cell = worksheet_summary.cell(row=row_num, column=col_num)
+        
+        # Nagłówki
+        for col_idx, col_name in enumerate(summary_df.columns, start=1):
+            cell = worksheet_summary.cell(row=1, column=col_idx, value=col_name)
+            cell.font = styles.header_font
+            cell.fill = styles.header_fill
+            cell.alignment = styles.header_alignment
+            cell.border = styles.thin_border
+        
+        # Dane z formułami
+        for row_idx, (_, row_data) in enumerate(summary_df.iterrows(), start=2):
+            for col_idx, col_name in enumerate(summary_df.columns, start=1):
+                cell = worksheet_summary.cell(row=row_idx, column=col_idx)
                 cell.font = styles.data_font
                 cell.border = styles.thin_border
-
-                if col_num == 1:
+                
+                if col_idx == 1:  # Osoba
+                    cell.value = row_data.iloc[0]
                     cell.alignment = styles.data_alignment_left
-                else:
+                elif col_idx == 2:  # Łączne godziny
+                    cell.value = row_data.iloc[1]
+                    cell.number_format = "0.0"
                     cell.alignment = styles.data_alignment_right
-                    if col_num in [2, 3]:
-                        cell.number_format = "0.00"
-                    else:
-                        cell.number_format = "0.0"
+                elif col_idx == 3:  # Godziny twórcze
+                    cell.value = row_data.iloc[2]
+                    cell.number_format = "0.0"
+                    cell.alignment = styles.data_alignment_right
+                elif col_idx == 4:  # % Pracy twórczej - FORMUŁA
+                    cell.value = f"=C{row_idx}/B{row_idx}*100"
+                    cell.number_format = "0.0"
+                    cell.alignment = styles.data_alignment_right
+                elif col_idx == 5:  # Pokrycie danymi
+                    cell.value = row_data.iloc[4]
+                    cell.number_format = "0"
+                    cell.alignment = styles.data_alignment_right
 
         worksheet_summary.freeze_panes = "A2"
 
