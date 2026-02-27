@@ -349,7 +349,7 @@ def _prepare_excel_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     export_df["Czas (h)"] = df["time_hours"]
     export_df["Procent twórczości"] = df["creative_percent"]
     export_df["Godziny twórcze"] = df["creative_hours"].apply(
-        lambda x: f"{x:.1f}h" if pd.notna(x) and x > 0 else "Brak danych"
+        lambda x: hours_to_hm_format(x) if pd.notna(x) and x > 0 else "Brak danych"
     )
     export_df["Godziny twórcze (h)"] = df["creative_hours"]
 
