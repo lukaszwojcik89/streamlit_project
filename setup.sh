@@ -79,21 +79,15 @@ else
     fi
 fi
 
-# Upgrade pip
-echo ""
-echo "4️⃣ Aktualizuję pip..."
-pip install --upgrade pip setuptools wheel > /dev/null 2>&1
-echo "✅ Pip zaktualizowany"
-
 # Install requirements
 echo ""
-echo "5️⃣ Instaluję zależności..."
-pip install -r requirements.txt > /dev/null 2>&1
+echo "4️⃣ Instaluję zależności..."
+python -m pip install -r requirements.txt --quiet
 echo "✅ Zależności zainstalowane"
 
 # Test imports
 echo ""
-echo "6️⃣ Testuję importy..."
+echo "5️⃣ Testuję importy..."
 python -c "import streamlit, pandas, plotly, openpyxl; print('✅ Wszystko OK!')" 2>/dev/null || {
     echo "❌ Błąd przy importach. Spróbuj uruchomić ponownie."
     exit 1
@@ -106,7 +100,11 @@ echo "================================================"
 echo ""
 echo "🎯 Aby uruchomić aplikację:"
 echo ""
-echo "   source .venv/bin/activate"
+if [ -f ".venv/Scripts/activate" ]; then
+    echo "   source .venv/Scripts/activate   # (Windows Git Bash)"
+else
+    echo "   source .venv/bin/activate       # (macOS/Linux)"
+fi
 echo "   streamlit run app.py"
 echo ""
 echo "📌 Aplikacja uruchomi się pod: http://localhost:8501"
