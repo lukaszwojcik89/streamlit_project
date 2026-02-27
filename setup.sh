@@ -27,8 +27,18 @@ echo "✅ Python: $PYTHON_VERSION"
 # Create venv
 echo ""
 echo "2️⃣ Tworzę wirtualne środowisko..."
+VENV_PY_WIN=".venv/Scripts/python.exe"
+VENV_PY_UNIX=".venv/bin/python"
+
 if [ -d ".venv" ]; then
-    echo "✅ Folder .venv już istnieje. Pomijam tworzenie..."
+    if [ -f "$VENV_PY_WIN" ] || [ -f "$VENV_PY_UNIX" ]; then
+        echo "✅ Folder .venv już istnieje. Pomijam tworzenie..."
+    else
+        echo "⚠️  Folder .venv istnieje, ale brak plików Pythona. Tworzę od nowa..."
+        rm -rf .venv
+        $PYTHON_CMD -m venv .venv
+        echo "✅ Środowisko wirtualne utworzone"
+    fi
 else
     $PYTHON_CMD -m venv .venv
     echo "✅ Środowisko wirtualne utworzone"
