@@ -480,7 +480,7 @@ def render_top_tasks_table(df: pd.DataFrame):
         title="Total Creative Score — suma ze wszystkich zadań osoby",
         labels={"total_score": "Total Score", "person": "Osoba"},
         color="total_score",
-        color_continuous_scale="Viridis",
+        color_continuous_scale="Plasma",
         hover_data={"total_score": ":.1f", "score": ":.2f", "time_hours": True, "creative_hours": True, "creative_percent": True},
         category_orders={"person": top_tasks_df["person"].tolist()},  # Zachowaj kolejność rankingu
     )
@@ -1082,7 +1082,7 @@ def render_worklogs_section(df_worklogs_by_month: dict, months_available: list):
                     ),
                     x=heatmap_pivot.columns,
                     y=heatmap_pivot.index,
-                    color_continuous_scale="RdYlGn",
+                    color_continuous_scale="Plasma",
                     aspect="auto",
                 )
                 fig_heatmap.update_layout(height=400)
@@ -1470,8 +1470,8 @@ def render_personal_dashboard(df: pd.DataFrame):
                     orientation="h",
                     title="Koszt pracy per kategoria",
                     labels={"Koszt [PLN]": "Koszt (PLN)", "Kategoria": ""},
-                    color="Wartość twórcza [PLN]",
-                    color_continuous_scale="Viridis",
+                    color="Koszt [PLN]",
+                    color_continuous_scale="Plasma",
                 )
                 fig_cost.update_layout(height=400)
                 st.plotly_chart(fig_cost, use_container_width=True)
