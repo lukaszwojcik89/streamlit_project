@@ -868,6 +868,19 @@ def render_worklogs_section(df_worklogs_by_month: dict, months_available: list):
         total_hours = month_data_agg["time_hours"].sum()
         working_days = month_data["Start Date"].dt.date.nunique()
         creative_hours = month_data_agg["creative_hours"].sum()
+        total_tasks = len(month_data_agg)
+        tasks_with_data = month_data_agg["creative_percent"].notna().sum()
+        data_coverage = (tasks_with_data / total_tasks * 100) if total_tasks > 0 else 0
+        avg_task_hours = total_hours / total_tasks if total_tasks > 0 else 0
+        creative_hours_ratio = (
+            creative_hours / total_hours * 100 if total_hours > 0 else 0
+        )
+        top3_hours = (
+            month_data_agg.nlargest(3, "time_hours")["time_hours"].sum()
+            if total_tasks > 0
+            else 0
+        )
+        focus_index = top3_hours / total_hours * 100 if total_hours > 0 else 0
 
         with stat_col1:
             st.metric("⏰ Łączne godziny", f"{total_hours:.1f}h")
@@ -886,6 +899,20 @@ def render_worklogs_section(df_worklogs_by_month: dict, months_available: list):
 
         with stat_col4:
             st.metric("👥 Osób", month_data_agg["person"].nunique())
+
+        extra_col1, extra_col2, extra_col3, extra_col4 = st.columns(4)
+
+        with extra_col1:
+            st.metric("📊 Pokrycie danymi", f"{data_coverage:.0f}%")
+
+        with extra_col2:
+            st.metric("🎯 Fokus Top3 (udział)", f"{focus_index:.0f}%")
+
+        with extra_col3:
+            st.metric("⏱️ Średnia h/zadanie", f"{avg_task_hours:.1f}h")
+
+        with extra_col4:
+            st.metric("💠 Udział godzin twórczych", f"{creative_hours_ratio:.0f}%")
 
 
         with col4:
@@ -1276,6 +1303,42 @@ def render_personal_dashboard(df: pd.DataFrame):
             )
     
     st.markdown("---")
+
+    # JAKOŚĆ DANYCH I FOKUS
+    st.markdown("### 📌 Jakość danych i fokus")
+    kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
+
+    with kpi_col1:
+        st.metric(
+            label="⏱️ Średnia h/zadanie",
+            value=f"{stats['avg_task_hours']:.1f}h"
+        )
+
+    with kpi_col2:
+        st.metric(
+            label="📊 Pokrycie danymi",
+            value=f"{stats['data_coverage']:.0f}%"
+        )
+
+    with kpi_col3:
+        if stats["creative_percent_std"] is not None:
+            st.metric(
+                label="📉 Odchylenie % twórczości",
+                value=f"{stats['creative_percent_std']:.1f}%"
+            )
+        else:
+            st.metric(
+                label="📉 Odchylenie % twórczości",
+                value="—"
+            )
+
+    with kpi_col4:
+        st.metric(
+            label="🎯 Fokus Top3 (udział)",
+            value=f"{stats['focus_index']:.0f}%"
+        )
+
+    st.markdown("---")
     
     # CREATIVE SCORE
     st.markdown("### 🏆 Creative Score")
@@ -1459,6 +1522,28 @@ def render_personal_dashboard(df: pd.DataFrame):
                 label="💎 Wartość pracy twórczej",
                 value=f"{creative_cost:,.2f} PLN",
                 help=help_text
+            )
+
+        # Dodatkowe KPI kosztowe
+        extra_cost_col1, extra_cost_col2 = st.columns(2)
+        non_creative_cost_total = total_cost - creative_cost
+        cost_per_creative_hour = (
+            creative_cost / stats["creative_hours"] if stats["creative_hours"] > 0 else 0
+        )
+        waste_ratio = (
+            non_creative_cost_total / total_cost * 100 if total_cost > 0 else 0
+        )
+
+        with extra_cost_col1:
+            st.metric(
+                label="💸 Koszt 1h twórczej",
+                value=f"{cost_per_creative_hour:,.2f} PLN/h"
+            )
+
+        with extra_cost_col2:
+            st.metric(
+                label="🧯 Udział nietwórczy (koszt)",
+                value=f"{waste_ratio:.0f}%"
             )
         
         st.markdown("---")
