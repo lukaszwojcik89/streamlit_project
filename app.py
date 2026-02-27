@@ -1760,8 +1760,10 @@ def main():
         months_available = []
 
         if not df_worklogs.empty:
+            # Agreguj worklogi per miesiąc - każde zadanie (key) pojawia się tylko raz per osoba
+            # Czasy i procenty są sumowane/uśredniane, nie zduplikowane
             df_worklogs_by_month = {
-                month: group.copy()
+                month: aggregate_worklogs_to_report(group)
                 for month, group in df_worklogs.groupby("month_str")
             }
             months_available = sorted(df_worklogs_by_month.keys(), reverse=True)
