@@ -1439,7 +1439,14 @@ def render_personal_dashboard(df: pd.DataFrame):
                 if most_valuable_task:
                     st.markdown("#### 💎 Najwyższa wartość biznesowa")
                     st.markdown(f"**{most_valuable_task['task']}**")
-                    st.caption(f"🔑 {most_valuable_task['key']}")
+                    
+                    # Extrahuj key z tytułu jeśli tam jest (format "XXX-123: ...")
+                    task_title = most_valuable_task['task']
+                    if ':' in task_title:
+                        extracted_key = task_title.split(':')[0].strip()
+                    else:
+                        extracted_key = most_valuable_task['key']
+                    st.caption(f"🔑 {extracted_key}")
                     
                     col_score, col_cost_m = st.columns(2)
                     with col_score:
@@ -1462,7 +1469,14 @@ def render_personal_dashboard(df: pd.DataFrame):
                 if least_valuable_task:
                     st.markdown("#### ⚠️ Największy drain budżetu")
                     st.markdown(f"**{least_valuable_task['task']}**")
-                    st.caption(f"🔑 {least_valuable_task['key']}")
+                    
+                    # Extrahuj key z tytułu jeśli tam jest
+                    task_title = least_valuable_task['task']
+                    if ':' in task_title:
+                        extracted_key = task_title.split(':')[0].strip()
+                    else:
+                        extracted_key = least_valuable_task['key']
+                    st.caption(f"🔑 {extracted_key}")
                     
                     col_score, col_cost_m = st.columns(2)
                     with col_score:
@@ -1473,9 +1487,11 @@ def render_personal_dashboard(df: pd.DataFrame):
                             value=f"{non_creative_cost:,.0f} PLN"
                         )
                     with col_cost_m:
+                        creative_cost = (least_valuable_task['cost'] * 
+                                        least_valuable_task['creative_percent'] / 100)
                         st.metric(
-                            label="Razem koszt",
-                            value=f"{least_valuable_task['cost']:,.0f} PLN"
+                            label="Koszt pracy twórczej",
+                            value=f"{creative_cost:,.0f} PLN"
                         )
                     
                     st.caption(
