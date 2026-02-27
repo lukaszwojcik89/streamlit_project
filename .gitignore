@@ -372,3 +372,5 @@ $RECYCLE.BIN/
 .git
 app_refactored.py
 CLAUDE.md
+.claude
+data/**
