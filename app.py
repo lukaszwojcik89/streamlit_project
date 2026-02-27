@@ -1343,33 +1343,42 @@ def render_personal_dashboard(df: pd.DataFrame):
                 use_score = True
             
             if not valuable_tasks.empty:
-                # Najwartościowsze zadanie (najwyższy creative score)
-                if use_score:
-                    most_valuable_idx = valuable_tasks["task_score"].idxmax()
-                    most_valuable_task = {
-                        "task": valuable_tasks.loc[most_valuable_idx, "task"],
-                        "key": valuable_tasks.loc[most_valuable_idx, "key"] if "key" in valuable_tasks.columns else "—",
-                        "hours": valuable_tasks.loc[most_valuable_idx, "time_hours"],
-                        "creative_percent": valuable_tasks.loc[most_valuable_idx, "creative_percent"],
-                        "cost": valuable_tasks.loc[most_valuable_idx, "task_cost"],
-                        "score": valuable_tasks.loc[most_valuable_idx, "task_score"]
-                    }
-                else:
-                    most_valuable_idx = valuable_tasks["task_cost"].idxmax()
-                    most_valuable_task = {
-                        "task": valuable_tasks.loc[most_valuable_idx, "task"],
-                        "key": valuable_tasks.loc[most_valuable_idx, "key"] if "key" in valuable_tasks.columns else "—",
-                        "hours": valuable_tasks.loc[most_valuable_idx, "time_hours"],
-                        "creative_percent": valid_tasks.loc[most_valuable_idx, "creative_percent"] if "creative_percent" in valuable_tasks.columns else 0,
-                        "cost": valuable_tasks.loc[most_valuable_idx, "task_cost"],
-                        "score": 0
-                    }
+                # Zaawansowane metryki biznesowe
                 
-                # Najmniej wartościowe zadanie (najniższy creative score)
-                if use_score:
-                    least_valuable_idx = valuable_tasks["task_score"].idxmin()
-                else:
-                    least_valuable_idx = valuable_tasks["task_cost"].idxmin()
+                # Value Density = creative_score / cost (wartość twórcza per PLN)
+                valuable_tasks["value_density"] = valuable_tasks.apply(
+                    lambda row: row["task_score"] / row["task_cost"] if row["task_cost"] > 0 else 0,
+                    axis=1
+                )
+                
+                # Business Impact = creative_score × creative_percent/100 (całkowita wartość biznesowa)
+                valuable_tasks["business_impact"] = (
+                    valuable_tasks["task_score"] * valuable_tasks["creative_percent"] / 100
+                )
+                
+                # Non-creative Cost = cost × (1 - creative_percent/100)
+                valuable_tasks["non_creative_cost"] = (
+                    valuable_tasks["task_cost"] * (1 - valuable_tasks["creative_percent"] / 100)
+                )
+                
+                # Opportunity Loss = hours × (1 - creative_percent/100)
+                valuable_tasks["opportunity_loss"] = (
+                    valuable_tasks["time_hours"] * (1 - valuable_tasks["creative_percent"] / 100)
+                )
+                
+                # Najwartościowsze = najwyższy Business Impact (największa wartość biznesowa)
+                most_valuable_idx = valuable_tasks["business_impact"].idxmax()
+                most_valuable_task = {
+                    "task": valuable_tasks.loc[most_valuable_idx, "task"],
+                    "key": valuable_tasks.loc[most_valuable_idx, "key"] if "key" in valuable_tasks.columns else "—",
+                    "hours": valuable_tasks.loc[most_valuable_idx, "time_hours"],
+                    "creative_percent": valuable_tasks.loc[most_valuable_idx, "creative_percent"],
+                    "cost": valuable_tasks.loc[most_valuable_idx, "task_cost"],
+                    "score": valuable_tasks.loc[most_valuable_idx, "task_score"]
+                }
+                
+                # Najmniej wartościowe = najwyższy Non-creative Cost (największy drain budżetu na nietwórcze)
+                least_valuable_idx = valuable_tasks["non_creative_cost"].idxmax()
                     
                 least_valuable_task = {
                     "task": valuable_tasks.loc[least_valuable_idx, "task"],
@@ -1428,19 +1437,20 @@ def render_personal_dashboard(df: pd.DataFrame):
             
             with col_exp:
                 if most_valuable_task:
-                    st.markdown("#### 💎 Najbardziej wartościowe")
+                    st.markdown("#### 💎 Najwyższa wartość biznesowa")
                     st.markdown(f"**{most_valuable_task['task']}**")
                     st.caption(f"🔑 {most_valuable_task['key']}")
                     
-                    if most_valuable_task['score'] > 0:
+                    col_score, col_cost_m = st.columns(2)
+                    with col_score:
                         st.metric(
                             label="Creative Score",
                             value=f"{most_valuable_task['score']:.2f}"
                         )
-                    else:
+                    with col_cost_m:
                         st.metric(
-                            label="Koszt zadania",
-                            value=f"{most_valuable_task['cost']:,.2f} PLN"
+                            label="Koszt",
+                            value=f"{most_valuable_task['cost']:,.0f} PLN"
                         )
                     
                     st.caption(
@@ -1450,19 +1460,22 @@ def render_personal_dashboard(df: pd.DataFrame):
             
             with col_cheap:
                 if least_valuable_task:
-                    st.markdown("#### 📉 Najmniej wartościowe")
+                    st.markdown("#### ⚠️ Największy drain budżetu")
                     st.markdown(f"**{least_valuable_task['task']}**")
                     st.caption(f"🔑 {least_valuable_task['key']}")
                     
-                    if least_valuable_task['score'] > 0:
+                    col_score, col_cost_m = st.columns(2)
+                    with col_score:
+                        non_creative_cost = (least_valuable_task['cost'] * 
+                                           (1 - least_valuable_task['creative_percent'] / 100))
                         st.metric(
-                            label="Creative Score",
-                            value=f"{least_valuable_task['score']:.2f}"
+                            label="Koszt bez wartości",
+                            value=f"{non_creative_cost:,.0f} PLN"
                         )
-                    else:
+                    with col_cost_m:
                         st.metric(
-                            label="Koszt zadania",
-                            value=f"{least_valuable_task['cost']:,.2f} PLN"
+                            label="Razem koszt",
+                            value=f"{least_valuable_task['cost']:,.0f} PLN"
                         )
                     
                     st.caption(
