@@ -273,7 +273,7 @@ def render_executive_summary(df: pd.DataFrame):
 
     st.markdown("## 📋 Executive Summary")
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         if summary["top_performer"]:
@@ -362,7 +362,7 @@ def render_executive_summary(df: pd.DataFrame):
             "% Pracy twórczej": st.column_config.NumberColumn(format="%.1f%%"),
             "Pokrycie danymi": st.column_config.NumberColumn(format="%.0f%%"),
         },
-        use_container_width=True,
+        width="stretch",
         hide_index=False,
     )
     st.caption(
@@ -380,7 +380,7 @@ def render_executive_summary(df: pd.DataFrame):
             lambda x: f"{x:.0f}%" if pd.notna(x) else "—"
         )
 
-        st.dataframe(eff_df, use_container_width=True, hide_index=False)
+        st.dataframe(eff_df, width="stretch", hide_index=False)
         st.caption(
             "**Jak liczymy:**\n"
             "- Średni % twórczości: Zwykła średnia arytmetyczna % dla wszystkich zadań w danej kategorii\n"
@@ -392,7 +392,7 @@ def render_executive_summary(df: pd.DataFrame):
         st.markdown("### 🤝 Współpraca w zespole")
         collab_df = summary["collaboration_table"].copy()
 
-        st.dataframe(collab_df, use_container_width=True, hide_index=True)
+        st.dataframe(collab_df, width="stretch", hide_index=True)
         st.caption("Najczęstsze pary współpracujące nad wspólnymi zadaniami")
 
     # DODATKOWE STATYSTYKI
@@ -415,7 +415,7 @@ def render_executive_summary(df: pd.DataFrame):
                 lambda x: f"{x:.1f}"
             )
 
-            st.dataframe(prod_df, use_container_width=True, hide_index=False)
+            st.dataframe(prod_df, width="stretch", hide_index=False)
             st.caption(
                 "**Ranking per osoba — metryki produktywności i jakości:**\n"
                 "- **Liczba zadań:** ile zadań osoba realizowała\n"
@@ -445,10 +445,15 @@ def render_top_tasks_table(df: pd.DataFrame):
 
     # Formatuj do wyświetlenia
     display_df = format_display_table(top_tasks_df)
+    if "contribution_pct" in display_df.columns:
+        display_df["contribution_pct"] = display_df["contribution_pct"].apply(
+            lambda x: f"{x:.0f}%" if x and x > 0 else "—"
+        )
 
     display_cols = [
         "person",
         "total_score",
+        "contribution_pct",
         "task",
         "key",
         "time_hours",
@@ -460,6 +465,7 @@ def render_top_tasks_table(df: pd.DataFrame):
     display_names = [
         "👤 Osoba",
         "🏆 Total Score",
+        "🎯 Udział w Total",
         "📋 Najlepsze zadanie",
         "🔑 Klucz",
         "⏰ Czas",
@@ -472,7 +478,7 @@ def render_top_tasks_table(df: pd.DataFrame):
     st.dataframe(
         display_df[display_cols].rename(columns=dict(zip(display_cols, display_names))).reset_index(drop=True),
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
     )
     
     st.caption(
@@ -881,6 +887,13 @@ def render_worklogs_section(df_worklogs_by_month: dict, months_available: list):
         with stat_col4:
             st.metric("👥 Osób", month_data_agg["person"].nunique())
 
+
+        with col4:
+            st.metric(
+                "⏱️ Średnia długość zadania",
+                f"{summary['avg_task_hours']:.1f}h",
+                delta=f"{summary['creative_hours_ratio']:.0f}% twórczych",
+            )
     # Executive Summary dla miesiąca
     st.markdown("---")
     render_executive_summary(month_data_agg)
@@ -1593,7 +1606,7 @@ def render_personal_dashboard(df: pd.DataFrame):
                 cost_df_display["Godz. twórcze"] = cost_df_display["Godz. twórcze"].apply(lambda x: f"{x:.1f}h")
                 cost_df_display["Wartość twórcza [PLN]"] = cost_df_display["Wartość twórcza [PLN]"].apply(lambda x: f"{x:,.2f}")
                 
-                st.dataframe(cost_df_display, use_container_width=True, hide_index=True)
+                st.dataframe(cost_df_display, width="stretch", hide_index=True)
                 
                 if selected_month != "Wszystkie":
                     st.caption(
@@ -1618,7 +1631,7 @@ def render_personal_dashboard(df: pd.DataFrame):
                     color_continuous_scale="Plasma",
                 )
                 fig_cost.update_layout(height=400)
-                st.plotly_chart(fig_cost, use_container_width=True)
+                st.plotly_chart(fig_cost, width="stretch")
     
     st.markdown("---")
     
@@ -1634,7 +1647,7 @@ def render_personal_dashboard(df: pd.DataFrame):
         
         top_tasks_display.columns = ["📋 Zadanie", "🔑 Klucz", "⏰ Czas", "🎨 %", "✨ Godz. twórcze", "💎 Score"]
         
-        st.dataframe(top_tasks_display, use_container_width=True, hide_index=True)
+        st.dataframe(top_tasks_display, width="stretch", hide_index=True)
 
 
 def render_help_tab():
