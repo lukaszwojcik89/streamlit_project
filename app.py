@@ -352,7 +352,7 @@ def render_executive_summary(df: pd.DataFrame):
             "Pokrycie danymi": st.column_config.NumberColumn(format="%.0f%%"),
         },
         use_container_width=True,
-        hide_index=True,
+        hide_index=False,
     )
     st.caption(
         "**Jak liczymy % Pracy twórczej:** "
@@ -369,7 +369,7 @@ def render_executive_summary(df: pd.DataFrame):
             lambda x: f"{x:.0f}%" if pd.notna(x) else "—"
         )
 
-        st.dataframe(eff_df, use_container_width=True, hide_index=True)
+        st.dataframe(eff_df, use_container_width=True, hide_index=False)
         st.caption(
             "**Jak liczymy:**\n"
             "- Średni % twórczości: Zwykła średnia arytmetyczna % dla wszystkich zadań w danej kategorii\n"
@@ -385,7 +385,7 @@ def render_executive_summary(df: pd.DataFrame):
         st.caption("Najczęstsze pary współpracujące nad wspólnymi zadaniami")
 
     # DODATKOWE STATYSTYKI
-    with st.expander("📊 Dodatkowe statystyki"):
+    with st.expander("📊 Dodatkowe statystyki", expanded=True):
         # PRODUKTYWNOŚĆ
         if summary["productivity_table"] is not None:
             st.markdown("#### 📊 Produktywność zespołu")
@@ -404,7 +404,7 @@ def render_executive_summary(df: pd.DataFrame):
                 lambda x: f"{x:.1f}"
             )
 
-            st.dataframe(prod_df, use_container_width=True, hide_index=True)
+            st.dataframe(prod_df, use_container_width=True, hide_index=False)
             st.caption(
                 "**Ranking per osoba — metryki produktywności i jakości:**\n"
                 "- **Liczba zadań:** ile zadań osoba realizowała\n"
@@ -1196,7 +1196,7 @@ def render_personal_dashboard(df: pd.DataFrame):
         return
     
     # Filtruj dane
-    df_filtered = df.copy()
+    df_filtered = df[df["person"] == selected_person].copy()
     if has_months and selected_month != "Wszystkie":
         df_filtered = df_filtered[df_filtered["month_str"] == selected_month]
     
