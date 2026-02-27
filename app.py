@@ -158,17 +158,22 @@ def aggregate_worklogs_to_report(df_worklogs: pd.DataFrame) -> pd.DataFrame:
                 "time_hours": group["time_hours"].sum(),
                 "creative_hours": group["creative_hours"].sum(),
                 "creative_percent": weighted_creative_percent(group),
+                "start_date_min": group["Start Date"].min() if "Start Date" in group.columns else None,
+                "start_date_max": group["Start Date"].max() if "Start Date" in group.columns else None,
             }
         ),
         include_groups=False,
     )
 
-    # Dodaj task (nie ma go po groupby)
+    # Dodaj task i Start Date (nie ma go po groupby)
     task_mapping = df_worklogs.groupby("key")["task"].first()
     df_agg["task"] = df_agg["key"].map(task_mapping)
+    
+    # Użyj min daty jako reprezentatywnej dla zadania
+    df_agg["Start Date"] = df_agg["start_date_min"]
 
     # Reorder columns
-    return df_agg[["person", "task", "key", "time_hours", "creative_percent", "creative_hours"]]
+    return df_agg[["person", "task", "key", "time_hours", "creative_percent", "creative_hours", "Start Date"]]
 
 
 # =============================================================================
@@ -814,6 +819,9 @@ def render_worklogs_section(df_worklogs_by_month: dict, months_available: list):
         return
 
     month_data = df_worklogs_by_month[selected_month]
+    
+    # Agreguj dla statystyk (każde zadanie per osoba pojawia się raz)
+    month_data_agg = aggregate_worklogs_to_report(month_data)
 
     # Oblicz range dat
     start_date = month_data["Start Date"].min()
@@ -846,9 +854,9 @@ def render_worklogs_section(df_worklogs_by_month: dict, months_available: list):
     with st.expander("📈 Statystyki miesiąca", expanded=True):
         stat_col1, stat_col2, stat_col3, stat_col4 = st.columns(4)
 
-        total_hours = month_data["time_hours"].sum()
+        total_hours = month_data_agg["time_hours"].sum()
         working_days = month_data["Start Date"].dt.date.nunique()
-        creative_hours = month_data["creative_hours"].sum()
+        creative_hours = month_data_agg["creative_hours"].sum()
 
         with stat_col1:
             st.metric("⏰ Łączne godziny", f"{total_hours:.1f}h")
@@ -866,11 +874,11 @@ def render_worklogs_section(df_worklogs_by_month: dict, months_available: list):
             st.metric("🎨 Średni %", f"{avg_creative_pct:.0f}%")
 
         with stat_col4:
-            st.metric("👥 Osób", month_data["person"].nunique())
+            st.metric("👥 Osób", month_data_agg["person"].nunique())
 
     # Executive Summary dla miesiąca
     st.markdown("---")
-    render_executive_summary(month_data)
+    render_executive_summary(month_data_agg)
     st.markdown("---")
 
     # Timeline
@@ -896,7 +904,7 @@ def render_worklogs_section(df_worklogs_by_month: dict, months_available: list):
 
     # Top zadania per osoba
     st.markdown("### 🎯 Top zadanie per osoba")
-    top_tasks_month = get_top_task_per_person(month_data)
+    top_tasks_month = get_top_task_per_person(month_data_agg)
 
     if not top_tasks_month.empty:
         display_df = format_display_table(top_tasks_month)
@@ -1760,10 +1768,10 @@ def main():
         months_available = []
 
         if not df_worklogs.empty:
-            # Agreguj worklogi per miesiąc - każde zadanie (key) pojawia się tylko raz per osoba
-            # Czasy i procenty są sumowane/uśredniane, nie zduplikowane
+            # Trzymaj surowe worklogi per miesiąc (NIE AGREGUJ)
+            # Agregacja będzie robiona lokalnie tam gdzie jest potrzebna
             df_worklogs_by_month = {
-                month: aggregate_worklogs_to_report(group)
+                month: group.copy()
                 for month, group in df_worklogs.groupby("month_str")
             }
             months_available = sorted(df_worklogs_by_month.keys(), reverse=True)
