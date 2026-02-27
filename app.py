@@ -1639,14 +1639,14 @@ def main():
         render_metrics(df_processed_full)
         st.markdown("---")
 
-        # TABS
-        tabs = ["📊 Dashboard", "� Personal Dashboard", "📋 Worklogs", "❓ Pomoc"]
-        if not months_available:
+        # TABS - porządek: Dashboard → Worklogs (jeśli dostępne) → Personal Dashboard → Pomoc
+        if months_available:
+            tabs = ["📊 Dashboard", "📋 Worklogs", "👤 Personal Dashboard", "❓ Pomoc"]
+        else:
             tabs = ["📊 Dashboard", "👤 Personal Dashboard", "❓ Pomoc"]
-
         tab_objects = st.tabs(tabs)
 
-        # TAB 1: DASHBOARD
+        # TAB 0: DASHBOARD
         with tab_objects[0]:
             # Executive Summary
             render_executive_summary(df_processed)
@@ -1667,7 +1667,7 @@ def main():
             creative_summary_full = calculate_creative_summary(df_processed_full)
             render_export_section(df_processed_full, creative_summary_full)
 
-        # TAB 2: WORKLOGS (jeśli dostępne)
+        # TAB 1: WORKLOGS (jeśli dostępne)
         if months_available:
             with tab_objects[1]:
                 # Filtruj wykluczone osoby z worklogs per miesiąc
@@ -1677,7 +1677,7 @@ def main():
                 }
                 render_worklogs_section(df_worklogs_by_month_filtered, months_available)
 
-        # TAB 3 (lub 2): PERSONAL DASHBOARD
+        # TAB 2 (lub 1): PERSONAL DASHBOARD
         personal_tab_index = 2 if months_available else 1
         with tab_objects[personal_tab_index]:
             # Jeśli mamy worklogs - użyj ich (mają month_str), jeśli nie - użyj df_processed
@@ -1692,7 +1692,7 @@ def main():
             
             render_personal_dashboard(df_for_personal)
 
-        # TAB 4 (lub 3): POMOC
+        # TAB 3 (lub 2): POMOC
         help_tab_index = 3 if months_available else 2
         with tab_objects[help_tab_index]:
             render_help_tab()
