@@ -1374,7 +1374,11 @@ def render_personal_dashboard(df: pd.DataFrame):
                     "hours": valuable_tasks.loc[most_valuable_idx, "time_hours"],
                     "creative_percent": valuable_tasks.loc[most_valuable_idx, "creative_percent"],
                     "cost": valuable_tasks.loc[most_valuable_idx, "task_cost"],
-                    "score": valuable_tasks.loc[most_valuable_idx, "task_score"]
+                    "score": valuable_tasks.loc[most_valuable_idx, "task_score"],
+                    "business_impact": valuable_tasks.loc[most_valuable_idx, "business_impact"],
+                    "value_density": valuable_tasks.loc[most_valuable_idx, "value_density"],
+                    "creative_cost": (valuable_tasks.loc[most_valuable_idx, "task_cost"] * 
+                                     valuable_tasks.loc[most_valuable_idx, "creative_percent"] / 100)
                 }
                 
                 # Najmniej wartościowe = najwyższy Non-creative Cost (największy drain budżetu na nietwórcze)
@@ -1386,7 +1390,11 @@ def render_personal_dashboard(df: pd.DataFrame):
                     "hours": valuable_tasks.loc[least_valuable_idx, "time_hours"],
                     "creative_percent": valuable_tasks.loc[least_valuable_idx, "creative_percent"] if "creative_percent" in valuable_tasks.columns else 0,
                     "cost": valuable_tasks.loc[least_valuable_idx, "task_cost"],
-                    "score": valuable_tasks.loc[least_valuable_idx, "task_score"] if use_score else 0
+                    "score": valuable_tasks.loc[least_valuable_idx, "task_score"] if use_score else 0,
+                    "non_creative_cost": valuable_tasks.loc[least_valuable_idx, "non_creative_cost"],
+                    "opportunity_loss": valuable_tasks.loc[least_valuable_idx, "opportunity_loss"],
+                    "creative_cost": (valuable_tasks.loc[least_valuable_idx, "task_cost"] * 
+                                     valuable_tasks.loc[least_valuable_idx, "creative_percent"] / 100)
                 }
         
         # Info o okresie
@@ -1431,7 +1439,7 @@ def render_personal_dashboard(df: pd.DataFrame):
         
         # Najbardziej i najmniej wartościowe zadanie
         if most_valuable_task or least_valuable_task:
-            st.markdown("### 🎯 Analiza wartości zadań")
+            st.markdown("### 🎯 Zaawansowana analiza wartości zadań")
             
             col_exp, col_cheap = st.columns(2)
             
@@ -1448,21 +1456,38 @@ def render_personal_dashboard(df: pd.DataFrame):
                         extracted_key = most_valuable_task['key']
                     st.caption(f"🔑 {extracted_key}")
                     
-                    col_score, col_cost_m = st.columns(2)
-                    with col_score:
+                    # Górny rząd metryk
+                    col_m1, col_m2 = st.columns(2)
+                    with col_m1:
+                        st.metric(
+                            label="Business Impact",
+                            value=f"{most_valuable_task['business_impact']:.2f}",
+                            help="creative_score × (creative_percent/100)"
+                        )
+                    with col_m2:
+                        st.metric(
+                            label="Value Density",
+                            value=f"{most_valuable_task['value_density']:.3f}",
+                            help="creative value per PLN spent"
+                        )
+                    
+                    # Środkowy rząd metryk
+                    col_m3, col_m4 = st.columns(2)
+                    with col_m3:
                         st.metric(
                             label="Creative Score",
                             value=f"{most_valuable_task['score']:.2f}"
                         )
-                    with col_cost_m:
+                    with col_m4:
                         st.metric(
-                            label="Koszt",
-                            value=f"{most_valuable_task['cost']:,.0f} PLN"
+                            label="Koszt twórczej pracy",
+                            value=f"{most_valuable_task['creative_cost']:,.0f} PLN"
                         )
                     
                     st.caption(
                         f"⏱️ Czas: {most_valuable_task['hours']:.1f}h | "
-                        f"🎨 Twórczość: {most_valuable_task['creative_percent']:.0f}%"
+                        f"🎨 Twórczość: {most_valuable_task['creative_percent']:.0f}% | "
+                        f"💸 Koszt całkowity: {most_valuable_task['cost']:,.0f} PLN"
                     )
             
             with col_cheap:
@@ -1478,25 +1503,44 @@ def render_personal_dashboard(df: pd.DataFrame):
                         extracted_key = least_valuable_task['key']
                     st.caption(f"🔑 {extracted_key}")
                     
-                    col_score, col_cost_m = st.columns(2)
-                    with col_score:
-                        non_creative_cost = (least_valuable_task['cost'] * 
-                                           (1 - least_valuable_task['creative_percent'] / 100))
+                    # Górny rząd metryk
+                    col_m1, col_m2 = st.columns(2)
+                    with col_m1:
                         st.metric(
                             label="Koszt bez wartości",
-                            value=f"{non_creative_cost:,.0f} PLN"
+                            value=f"{least_valuable_task['non_creative_cost']:,.0f} PLN",
+                            help="cost × (1 - creative_percent/100)"
                         )
-                    with col_cost_m:
-                        creative_cost = (least_valuable_task['cost'] * 
-                                        least_valuable_task['creative_percent'] / 100)
+                    with col_m2:
                         st.metric(
-                            label="Koszt pracy twórczej",
-                            value=f"{creative_cost:,.0f} PLN"
+                            label="Zmarnowane godziny",
+                            value=f"{least_valuable_task['opportunity_loss']:.1f}h",
+                            help="hours × (1 - creative_percent/100)"
+                        )
+                    
+                    # Środkowy rząd metryk
+                    col_m3, col_m4 = st.columns(2)
+                    with col_m3:
+                        if least_valuable_task['creative_cost'] > 0:
+                            st.metric(
+                                label="Koszt pracy twórczej",
+                                value=f"{least_valuable_task['creative_cost']:,.0f} PLN"
+                            )
+                        else:
+                            st.metric(
+                                label="Koszt pracy twórczej",
+                                value="0 PLN"
+                            )
+                    with col_m4:
+                        st.metric(
+                            label="Split kosztów",
+                            value=f"{(1 - least_valuable_task['creative_percent']/100)*100:.0f}% drain"
                         )
                     
                     st.caption(
                         f"⏱️ Czas: {least_valuable_task['hours']:.1f}h | "
-                        f"🎨 Twórczość: {least_valuable_task['creative_percent']:.0f}%"
+                        f"🎨 Twórczość: {least_valuable_task['creative_percent']:.0f}% | "
+                        f"💸 Koszt całkowity: {least_valuable_task['cost']:,.0f} PLN"
                     )
         
         st.markdown("---")
