@@ -1517,3 +1517,119 @@ def _categorize_personal_tasks(person_df: pd.DataFrame) -> Dict[str, Dict[str, f
             }
 
     return categories_data
+
+
+def generate_personalized_insight(
+    categories_breakdown: Dict[str, Dict[str, float]],
+    total_hours: float,
+    creative_percent_avg: Optional[float]
+) -> str:
+    """
+    Generuje personalizowany insight dla pracownika na podstawie rozkładu kategorii.
+
+    Args:
+        categories_breakdown: Dict z rozkladem godzin per kategoria
+        total_hours: Łączne godziny pracownika
+        creative_percent_avg: Średni % twórczości
+
+    Returns:
+        String z personalizowanym insightem i radą
+    """
+    if not categories_breakdown or total_hours == 0:
+        return "📊 Brak wystarczających danych do generowania insights."
+
+    # Sortuj kategorie po godzinach
+    categories_sorted = sorted(
+        categories_breakdown.items(),
+        key=lambda x: x[1]["hours"],
+        reverse=True
+    )
+
+    # Kategoria z największą ilością godzin
+    max_category = categories_sorted[0][0]
+    max_hours = categories_sorted[0][1]["hours"]
+    max_percent = (max_hours / total_hours * 100) if total_hours > 0 else 0
+
+    # Kategoria z najmniejszą ilością godzin (jeśli >0)
+    min_category = None
+    min_hours = 0
+    min_percent = 0
+    for cat, data in reversed(categories_sorted):
+        if data["hours"] > 0:
+            min_category = cat
+            min_hours = data["hours"]
+            min_percent = (min_hours / total_hours * 100) if total_hours > 0 else 0
+            break
+
+    # Porady zależne od kategorii
+    advice_map = {
+        "Bug/Hotfix": (
+            "🐛 **Rada:** Dużo czasu na bug fixy mogą wskazywać na problemy w kodzie lub testing. "
+            "Rozważ inwestycję w code review, testy i preventywne działania.",
+            "Mimo dużego zaangażowania w bug fixy, staraj się również planować czas na nowe features."
+        ),
+        "Code Review": (
+            "👀 **Rada:** Code review to kluczowe dla jakości zespołu! Doskonale, że inwestujesz czas w kontrolę kodu.",
+            "Staraj się równoważyć code review z własnymi implementacjami."
+        ),
+        "Testing": (
+            "✅ **Rada:** Testy to najlepsza inwestycja w długoterm. Testowanie zapobiega problemom i zmniejsza tech debt.",
+            "Przeanalizuj czy testy mogą być zautomatyzowane, aby zaoszczędzić czas."
+        ),
+        "Development/Implementacja": (
+            "💻 **Rada:** Większość czasu na development to naturalne. Pamiętaj o poświęceniu czasu na design i code review.",
+            "Staraj się nie zapominać o dokumentacji i planowaniu przed implementacją."
+        ),
+        "Analiza/Design": (
+            "📐 **Rada:** Dobrze zaplanowany design to fundament. Inwestycja w analizę oszczędza czas implementacji.",
+            "Upewnij się, że wiedza z analiz jest udokumentowana dla całego zespołu."
+        ),
+        "DevOps/Infrastruktura": (
+            "🔧 **Rada:** Infrastruktura wymaga uwagi. Spróbuj zautomatyzować powtarzalne zadania (skrypty, CI/CD).",
+            "Udostępnij wiedzę o infrastrukturze reszcie zespołu."
+        ),
+        "Szkolenia/Uczenie": (
+            "📚 **Rada:** Inwestycja w uczenie się to super! To gwarantuje długoterm rozwój i nowsze kompetencje.",
+            "Staraj się dzielić wiedzą ze zespołem - wspólne uczenie podnosi level całej grupy."
+        ),
+        "Administracja/Support": (
+            "🏢 **Rada:** Support i administracja mogą pochłaniać dużo czasu. Spróbuj zautomatyzować procesy.",
+            "Szukaj sposobów aby zmniejszyć powtarzalne zadania admin."
+        ),
+        "Spotkania/Sesje": (
+            "📞 **Rada:** Wiele spotkań może ograniczać czas na rzeczywistą pracę. "
+            "Przeanalizuj czy wszystkie są potrzebne lub czy mogą być krótsze.",
+            "Staraj się być produktywnym w spotkaniach - konkretne decyzje zamiast długich dyskusji."
+        ),
+    }
+
+    # Buduj główny insight
+    insight_text = f"📊 **Profil pracownika:** Spędzasz dużo czasu na **{max_category}** ({max_percent:.0f}% godzin)"
+
+    if min_category:
+        insight_text += f", ale mało na **{min_category}** ({min_percent:.1f}% godzin).\n\n"
+    else:
+        insight_text += ".\n\n"
+
+    # Dodaj poradę
+    if max_category in advice_map:
+        main_advice, secondary_advice = advice_map[max_category]
+        insight_text += main_advice
+
+        # Dodaj rad o najmniejszej kategorii jeśli istnieje
+        if min_category and min_category in advice_map:
+            _, min_secondary = advice_map[min_category]
+            insight_text += f"\n\n🎯 **Dodatkowe:** {min_secondary}"
+    else:
+        insight_text += f"🎯 **Rada:** Zastanów się nad balansem między {max_category} a innymi obowiązkami."
+
+    # Dodaj info o twórczości
+    if creative_percent_avg is not None:
+        if creative_percent_avg >= 70:
+            insight_text += f"\n\n✨ **Twórczość:** Świetnie! {creative_percent_avg:.0f}% Twojego czasu to rzeczywista praca twórcza. To wysoki poziom!"
+        elif creative_percent_avg >= 50:
+            insight_text += f"\n\n✨ **Twórczość:** Solidnie! {creative_percent_avg:.0f}% czasu to praca twórcza. Możesz spróbować podnieść ten procent."
+        else:
+            insight_text += f"\n\n✨ **Twórczość:** {creative_percent_avg:.0f}% - spróbuj dedykować więcej czasu na rzeczywisty development i kreatywne rozwiązania."
+
+    return insight_text

@@ -23,6 +23,7 @@ from helpers import (
     validate_data_structure,
     generate_executive_summary,
     generate_personal_stats,
+    generate_personalized_insight,
 )
 from export_utils import (
     export_to_csv,
@@ -1257,6 +1258,16 @@ def render_personal_dashboard(df: pd.DataFrame):
         value=f"{stats['creative_score']:.1f}",
         help="Suma (creative_hours × creative_% / 100) ze wszystkich zadań"
     )
+    
+    st.markdown("---")
+    
+    # PERSONALIZOWANY INSIGHT
+    insight = generate_personalized_insight(
+        stats["categories_breakdown"],
+        stats["total_hours"],
+        stats["creative_percent_avg"]
+    )
+    st.info(insight)
     
     st.markdown("---")
     
