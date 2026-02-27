@@ -140,8 +140,8 @@ def process_worklogs_data(df: pd.DataFrame) -> pd.DataFrame:
 
 @st.cache_data(show_spinner=False)
 def aggregate_worklogs_to_report(df_worklogs: pd.DataFrame) -> pd.DataFrame:
-    """Agreguje worklogs do postaci raportu głównego (per person + key)."""
-    # Group by PERSON + TASK - każda osoba ma osobny wpis dla każdego zadania
+    """Agreguje worklogs do postaci raportu głównego (per person + key + month)."""
+    # Group by PERSON + TASK + MONTH - każde zadanie per osoba per miesiąc pojawia się raz
     def weighted_creative_percent(group: pd.DataFrame) -> float | None:
         valid = group.dropna(subset=["creative_percent", "time_hours"])
         if valid.empty:
@@ -152,20 +152,22 @@ def aggregate_worklogs_to_report(df_worklogs: pd.DataFrame) -> pd.DataFrame:
         weighted_sum = (valid["creative_percent"] * valid["time_hours"]).sum()
         return round(float(weighted_sum / total_hours), 1)
 
-    df_agg = df_worklogs.groupby(["person", "key"], as_index=False).apply(
+    # Agreguj per (person, key, month_str) - to prawidłowe!
+    group_cols = ["person", "key", "month_str"] if "month_str" in df_worklogs.columns else ["person", "key"]
+    
+    df_agg = df_worklogs.groupby(group_cols, as_index=False).apply(
         lambda group: pd.Series(
             {
                 "time_hours": group["time_hours"].sum(),
                 "creative_hours": group["creative_hours"].sum(),
                 "creative_percent": weighted_creative_percent(group),
                 "start_date_min": group["Start Date"].min() if "Start Date" in group.columns else None,
-                "start_date_max": group["Start Date"].max() if "Start Date" in group.columns else None,
             }
         ),
         include_groups=False,
     )
 
-    # Dodaj task i Start Date (nie ma go po groupby)
+    # Dodaj task (nie ma go po groupby)
     task_mapping = df_worklogs.groupby("key")["task"].first()
     df_agg["task"] = df_agg["key"].map(task_mapping)
     
@@ -173,7 +175,10 @@ def aggregate_worklogs_to_report(df_worklogs: pd.DataFrame) -> pd.DataFrame:
     df_agg["Start Date"] = df_agg["start_date_min"]
 
     # Reorder columns
-    return df_agg[["person", "task", "key", "time_hours", "creative_percent", "creative_hours", "Start Date"]]
+    if "month_str" in df_agg.columns:
+        return df_agg[["person", "task", "key", "time_hours", "creative_percent", "creative_hours", "Start Date", "month_str"]]
+    else:
+        return df_agg[["person", "task", "key", "time_hours", "creative_percent", "creative_hours", "Start Date"]]
 
 
 # =============================================================================
@@ -1821,15 +1826,17 @@ def main():
         # TAB 2 (lub 1): PERSONAL DASHBOARD
         personal_tab_index = 2 if months_available else 1
         with tab_objects[personal_tab_index]:
-            # Jeśli mamy worklogs - użyj ich (mają month_str), jeśli nie - użyj df_processed
-            df_for_personal = df_worklogs if not df_worklogs.empty else df_processed
+            # ZAWSZE używaj zagregowanych danych!
+            # df_worklogs zawiera duplikaty (surowe worklogi)
+            # Użyj df_processed_full które już mają zagregowane (person, key)
+            df_for_personal = df_processed_full.copy()
             # Filtruj wykluczone osoby
             df_for_personal = df_for_personal[~df_for_personal["person"].isin(EXCLUDED_PEOPLE)].copy()
             
             # Debug info
             if df_for_personal.empty:
                 st.error("❌ Brak danych po filtracji!")
-                st.info(f"Worklogs empty: {df_worklogs.empty}, Processed rows: {len(df_processed)}")
+                st.info(f"Processed rows: {len(df_processed_full)}")
             
             render_personal_dashboard(df_for_personal)
 
