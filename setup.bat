@@ -23,28 +23,28 @@ REM Create venv
 echo.
 echo 2️⃣ Tworzę wirtualne środowisko...
 if exist .venv (
-    echo ⚠️  Folder .venv już istnieje. Usuwam...
-    rmdir /s /q .venv >nul 2>&1
+    echo ✅ Folder .venv już istnieje. Pomijam tworzenie...
+) else (
+    python -m venv .venv
+    if errorlevel 1 (
+        echo ❌ Błąd przy tworzeniu środowiska
+        pause
+        exit /b 1
+    )
+    echo ✅ Środowisko wirtualne utworzone
 )
-
-python -m venv .venv
-if errorlevel 1 (
-    echo ❌ Błąd przy tworzeniu środowiska
-    pause
-    exit /b 1
-)
-echo ✅ Środowisko wirtualne utworzone
 
 REM Activate venv
 echo.
 echo 3️⃣ Aktywuję środowisko...
-call .venv\Scripts\activate.bat
-if errorlevel 1 (
-    echo ❌ Błąd przy aktywacji środowiska
+if exist .venv\Scripts\activate.bat (
+    call .venv\Scripts\activate.bat
+    echo ✅ Środowisko aktywne
+) else (
+    echo ❌ Błąd: Nie znaleziono .venv\Scripts\activate.bat
     pause
     exit /b 1
 )
-echo ✅ Środowisko aktywne
 
 REM Upgrade pip
 echo.

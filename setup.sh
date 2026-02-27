@@ -10,30 +10,64 @@ echo "================================================"
 # Check Python
 echo ""
 echo "1️⃣ Sprawdzam Python..."
-if ! command -v python3 &> /dev/null; then
-    echo "❌ Python3 nie znaleziony. Zainstaluj Python 3.10+ i spróbuj ponownie."
+
+# Prefer 'python' (works on Windows Git Bash), fallback to 'python3' (macOS/Linux)
+if command -v python &> /dev/null; then
+    PYTHON_CMD="python"
+elif command -v python3 &> /dev/null; then
+    PYTHON_CMD="python3"
+else
+    echo "❌ Python nie znaleziony. Zainstaluj Python 3.10+ i spróbuj ponownie."
     exit 1
 fi
 
-PYTHON_VERSION=$(python3 --version | cut -d' ' -f2)
+PYTHON_VERSION=$($PYTHON_CMD --version | cut -d' ' -f2)
 echo "✅ Python: $PYTHON_VERSION"
 
 # Create venv
 echo ""
 echo "2️⃣ Tworzę wirtualne środowisko..."
 if [ -d ".venv" ]; then
-    echo "⚠️  Folder .venv już istnieje. Usuwam..."
-    rm -rf .venv
+    echo "✅ Folder .venv już istnieje. Pomijam tworzenie..."
+else
+    $PYTHON_CMD -m venv .venv
+    echo "✅ Środowisko wirtualne utworzone"
 fi
-
-python3 -m venv .venv
-echo "✅ Środowisko wirtualne utworzone"
 
 # Activate venv
 echo ""
 echo "3️⃣ Aktywuję środowisko..."
-source .venv/bin/activate
-echo "✅ Środowisko aktywne"
+
+# Check if already activated
+if [ -n "$VIRTUAL_ENV" ]; then
+    echo "✅ Środowisko już aktywne (VIRTUAL_ENV=$VIRTUAL_ENV)"
+else
+    # Try Windows path first
+    if [ -f ".venv/Scripts/activate" ]; then
+        source .venv/Scripts/activate
+        echo "✅ Środowisko aktywne (Windows Scripts/)"
+    # Try Unix path
+    elif [ -f ".venv/bin/activate" ]; then
+        source .venv/bin/activate
+        echo "✅ Środowisko aktywne (Unix bin/)"
+    # Try bash variant on Windows
+    elif [ -f ".venv/Scripts/activate.bat" ]; then
+        # For git bash, we can source the bash version if it exists
+        if [ -f ".venv/Scripts/activate.bash" ]; then
+            source .venv/Scripts/activate.bash
+            echo "✅ Środowisko aktywne (Windows Scripts bash)"
+        else
+            echo "⚠️  Znaleziono .venv ale nie się dało aktywować - spróbuj ręcznie:"
+            echo "   source .venv/Scripts/activate.bat"
+            exit 1
+        fi
+    else
+        echo "❌ Błąd: Nie znaleziono skryptu aktywacji w:"
+        echo "   - .venv/Scripts/activate (Windows)"
+        echo "   - .venv/bin/activate (Unix/macOS)"
+        exit 1
+    fi
+fi
 
 # Upgrade pip
 echo ""
