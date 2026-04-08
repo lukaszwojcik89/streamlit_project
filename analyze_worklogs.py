@@ -13,10 +13,10 @@ for i, col in enumerate(df_wl.columns, 1):
     non_null = df_wl[col].notna().sum()
     unique = df_wl[col].nunique()
     dtype = df_wl[col].dtype
-    
+
     # Pobierz sample wartości
     samples = df_wl[col].dropna().unique()[:2]
-    
+
     print(f"\n{i:2d}. {col}")
     print(f"    Typ: {dtype} | Non-null: {non_null:,}/{len(df_wl)} | Unique: {unique}")
     if len(samples) > 0:
@@ -28,31 +28,49 @@ print("=" * 100)
 
 # Kolumny kluczowe
 key_cols = [
-    'Issue Key', 'Issue Summary', 'Author', 'Time Spent', 'Start Date',
-    'Issue Type', 'Issue Status', 'Procent pracy twórczej', 'Story Points',
-    'Components', 'Project Key', 'Epic Key', 'Epic Summary'
+    "Issue Key",
+    "Issue Summary",
+    "Author",
+    "Time Spent",
+    "Start Date",
+    "Issue Type",
+    "Issue Status",
+    "Procent pracy twórczej",
+    "Story Points",
+    "Components",
+    "Project Key",
+    "Epic Key",
+    "Epic Summary",
 ]
 
 print("\nUzytkowe kolumny:")
 for col in key_cols:
     if col in df_wl.columns:
         non_null = df_wl[col].notna().sum()
-        print(f"  ✓ {col:40s} - {non_null:,}/{len(df_wl)} ({100*non_null/len(df_wl):.0f}%)")
+        print(
+            f"  ✓ {col:40s} - {non_null:,}/{len(df_wl)} ({100 * non_null / len(df_wl):.0f}%)"
+        )
 
 print("\n" + "=" * 100)
 print("POROWNANIE DANYCH")
 print("=" * 100)
 
 # Sumowanie czasu per osoba z worklogs
-by_person = df_wl.groupby('Author').agg({
-    'Time Spent (seconds)': 'sum',
-    'Issue Key': 'nunique',
-    'Issue Summary': 'nunique'
-}).sort_values('Time Spent (seconds)', ascending=False)
+by_person = (
+    df_wl.groupby("Author")
+    .agg(
+        {
+            "Time Spent (seconds)": "sum",
+            "Issue Key": "nunique",
+            "Issue Summary": "nunique",
+        }
+    )
+    .sort_values("Time Spent (seconds)", ascending=False)
+)
 
-by_person['Time Spent (hours)'] = by_person['Time Spent (seconds)'] / 3600
-by_person = by_person[['Time Spent (hours)', 'Issue Key', 'Issue Summary']]
-by_person.columns = ['Godziny', 'Unikatowe Keys', 'Unikatowe Tasiki']
+by_person["Time Spent (hours)"] = by_person["Time Spent (seconds)"] / 3600
+by_person = by_person[["Time Spent (hours)", "Issue Key", "Issue Summary"]]
+by_person.columns = ["Godziny", "Unikatowe Keys", "Unikatowe Tasiki"]
 
 print("\nTop 10 osób (z worklogs):")
 print(by_person.head(10).to_string())
