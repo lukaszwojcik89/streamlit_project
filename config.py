@@ -14,8 +14,8 @@ from typing import Dict, List, Tuple
 # Progi dla kolorowania komórek w Excel i UI
 # Format: (próg_górny, kolor_hex)
 CREATIVE_PERCENT_THRESHOLDS: List[Tuple[int, str]] = [
-    (50, "FFE6E6"),   # Czerwony (0-50%)
-    (80, "FFFFCC"),   # Żółty (51-80%)
+    (50, "FFE6E6"),  # Czerwony (0-50%)
+    (80, "FFFFCC"),  # Żółty (51-80%)
     (100, "E6FFE6"),  # Zielony (81-100%)
 ]
 
@@ -180,9 +180,11 @@ CHART_COLOR_SCALES = {
 # DATACLASSES DLA TYPOWANIA
 # =============================================================================
 
+
 @dataclass
 class CreativeThreshold:
     """Próg kolorystyczny dla procentu twórczości."""
+
     max_percent: int
     color_hex: str
     label: str
