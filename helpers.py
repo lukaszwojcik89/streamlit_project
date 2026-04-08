@@ -452,7 +452,7 @@ def validate_data_structure(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
     if len(duplicates) > 0:
         warnings.append(
             f"Wykryto duplikaty użytkowników: {', '.join(duplicates[:3])}"
-            + (f" i {len(duplicates)-3} więcej" if len(duplicates) > 3 else "")
+            + (f" i {len(duplicates) - 3} więcej" if len(duplicates) > 3 else "")
         )
 
     # Sprawdź czy są czasy pracy
@@ -638,7 +638,7 @@ def generate_executive_summary(df: pd.DataFrame) -> Dict[str, Any]:
         if max_hours_person["Łącznie [h]"] > avg_hours + std_hours:
             summary["insights_team"].append(
                 f"📊 **Dominacja godzinowa:** {max_hours_person['Osoba']} realizuje {max_hours_person['Łącznie [h]']:.0f}h "
-                f"({max_hours_person['Łącznie [h]']/avg_hours:.1f}× średniej zespołu, "
+                f"({max_hours_person['Łącznie [h]'] / avg_hours:.1f}× średniej zespołu, "
                 f"+{max_hours_person['Łącznie [h]'] - avg_hours:.0f}h ponad benchmark)."
             )
 
@@ -820,8 +820,8 @@ def generate_executive_summary(df: pd.DataFrame) -> Dict[str, Any]:
                 else False
             ):
                 summary["insights_team"].append(
-                    f"📊 **Nierównomierne obciążenie:** Wysokie odchylenie godzin między członkami zespołu. "
-                    f"Rekomendowane: przegląd alokacji zadań pod kątem zrównoważenia pojemności."
+                    "📊 **Nierównomierne obciążenie:** Wysokie odchylenie godzin między członkami zespołu. "
+                    "Rekomendowane: przegląd alokacji zadań pod kątem zrównoważenia pojemności."
                 )
 
         # ==========================================
@@ -1365,7 +1365,7 @@ def generate_personal_stats(df: pd.DataFrame, person_name: str) -> Dict[str, Any
                 person_creative["time_hours"]
                 * (person_creative["creative_percent"] - weighted_avg) ** 2
             ).sum() / total_creative_task_hours
-            stats["creative_percent_std"] = variance ** 0.5
+            stats["creative_percent_std"] = variance**0.5
     tasks_with_data = person_df["creative_percent"].notna().sum()
     stats["data_coverage"] = (
         tasks_with_data / stats["num_tasks"] * 100 if stats["num_tasks"] > 0 else 0
@@ -1570,7 +1570,7 @@ def _categorize_personal_tasks(person_df: pd.DataFrame) -> Dict[str, Dict[str, f
 def generate_personalized_insight(
     categories_breakdown: Dict[str, Dict[str, float]],
     total_hours: float,
-    creative_percent_avg: Optional[float]
+    creative_percent_avg: Optional[float],
 ) -> str:
     """
     Generuje personalizowany insight dla pracownika na podstawie rozkładu kategorii.
@@ -1581,9 +1581,7 @@ def generate_personalized_insight(
 
     # Sortuj kategorie po godzinach
     categories_sorted = sorted(
-        categories_breakdown.items(),
-        key=lambda x: x[1]["hours"],
-        reverse=True
+        categories_breakdown.items(), key=lambda x: x[1]["hours"], reverse=True
     )
 
     # Top 3 kategorie
@@ -1594,7 +1592,9 @@ def generate_personalized_insight(
         top_3_text += f"{i}. **{cat}** — {data['hours']:.1f}h ({percent:.0f}%)\n"
 
     # Bottom 3 kategorie (tylko te > 0 godzin)
-    bottom_3 = [item for item in reversed(categories_sorted) if item[1]["hours"] > 0][:3]
+    bottom_3 = [item for item in reversed(categories_sorted) if item[1]["hours"] > 0][
+        :3
+    ]
     bottom_3_text = ""
     if bottom_3:
         bottom_3_text = "\n📉 **Trzy obszary o najmniejszym zaangażowaniu:**\n"
@@ -1610,7 +1610,9 @@ def generate_personalized_insight(
     insight_text = top_3_text + bottom_3_text
 
     # Generuj rady na podstawie profilu
-    profile_advice = _generate_profile_advice(top_names, bottom_names, total_hours, categories_breakdown)
+    profile_advice = _generate_profile_advice(
+        top_names, bottom_names, total_hours, categories_breakdown
+    )
     insight_text += "\n" + profile_advice
 
     # Dodaj informacje o twórczości
@@ -1629,7 +1631,7 @@ def _generate_profile_advice(
     top_names: list,
     bottom_names: list,
     total_hours: float,
-    categories_breakdown: Dict[str, Dict[str, float]]
+    categories_breakdown: Dict[str, Dict[str, float]],
 ) -> str:
     """
     Generuje rady na podstawie profilu pracownika — kombinacji TOP 3 i BOTTOM 3 kategorii.
@@ -1640,9 +1642,13 @@ def _generate_profile_advice(
 
     # Zdefiniuj grupy kategorii
     reactive_categories = {"Spotkania/Sesje", "Bug/Hotfix", "Administracja/Support"}
-    proactive_categories = {"Development/Implementacja", "Analiza/Design", "Testing", "Szkolenia/Uczenie"}
+    proactive_categories = {
+        "Development/Implementacja",
+        "Analiza/Design",
+        "Testing",
+        "Szkolenia/Uczenie",
+    }
     quality_categories = {"Code Review", "Testing"}
-    infrastructure_categories = {"DevOps/Infrastruktura"}
 
     reactive_in_top = len(top_set & reactive_categories)
     proactive_in_top = len(top_set & proactive_categories)
@@ -1694,9 +1700,7 @@ def _generate_profile_advice(
             "➜ **Porada:** Zaplanuj regularnie czas na naukę (minimum 4-5% czasu). To gwarantuje długoterminowy wzrost umiejętności.\n"
         )
     elif "Szkolenia/Uczenie" in top_names:
-        advice += (
-            "\n📚 **Świetny sposób na rozwój:** Regularnie poświęcasz czas na uczenie się. To zapewnia Ci przewagę konkurencyjną.\n"
-        )
+        advice += "\n📚 **Świetny sposób na rozwój:** Regularnie poświęcasz czas na uczenie się. To zapewnia Ci przewagę konkurencyjną.\n"
 
     # --- Profil 6: Testing zaniedbany ---
     if "Testing" in bottom_set and "Development/Implementacja" in top_set:
@@ -1705,9 +1709,7 @@ def _generate_profile_advice(
             "➜ **Porada:** Zautomatyzuj testy jednostkowe i integracyjne. To oszczędzi czas na długoterminę.\n"
         )
     elif "Testing" not in bottom_set and "Testing" in top_names:
-        advice += (
-            "\n✅ **Zapewniasz wysoką jakość:** Znaczący udział testów — świetne podejście do niezawodności.\n"
-        )
+        advice += "\n✅ **Zapewniasz wysoką jakość:** Znaczący udział testów — świetne podejście do niezawodności.\n"
 
     # --- Profil 7: Code Review ---
     if "Code Review" in bottom_set:
@@ -1716,9 +1718,7 @@ def _generate_profile_advice(
             "➜ **Porada:** Zwiększ czas na przeglądy kodu kolegów — to zapewnia dzielenie wiedzy i wychwytuje problemy wcześnie.\n"
         )
     elif "Code Review" in top_names:
-        advice += (
-            "\n👀 **Aktywnie wspierasz zespół:** Przeglądy kodu to Twoja siła — wspierasz jakość i dzielisz wiedzę.\n"
-        )
+        advice += "\n👀 **Aktywnie wspierasz zespół:** Przeglądy kodu to Twoja siła — wspierasz jakość i dzielisz wiedzę.\n"
 
     # --- Profil 8: DevOps zaniedbany ---
     if "DevOps/Infrastruktura" in bottom_set:
