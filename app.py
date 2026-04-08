@@ -12,15 +12,12 @@ import plotly.graph_objects as go
 
 from helpers import (
     parse_time_to_hours,
-    hours_to_hm_format,
     extract_creative_percentage,
-    fix_polish_encoding,
     apply_encoding_fix_to_dataframe,
     get_top_task_per_person,
     format_display_table,
     calculate_creative_summary,
     get_dynamic_creative_filter_options,
-    validate_data_structure,
     generate_executive_summary,
     generate_personal_stats,
     generate_personalized_insight,
@@ -34,8 +31,6 @@ from export_utils import (
 from config import (
     MAX_FILE_SIZE_MB,
     LARGE_FILE_WARNING_MB,
-    TABLE_HEADERS_WITH_EMOJI,
-    TABLE_HEADERS_PLAIN,
     DAY_NAMES_PL,
     DAY_ORDER,
     CHART_MIN_HEIGHT,
@@ -110,7 +105,9 @@ def process_worklogs_data(df: pd.DataFrame) -> pd.DataFrame:
     """Przetwarza dane z worklogs (płaski format z datami)."""
     df_work = df.copy()
 
-    df_work["Start Date"] = pd.to_datetime(df_work["Start Date"], errors="coerce")
+    df_work["Start Date"] = pd.to_datetime(
+        df_work["Start Date"], utc=True, errors="coerce"
+    ).dt.tz_localize(None)
     df_work["time_hours"] = df_work["Time Spent"].apply(parse_time_to_hours)
     df_work["creative_percent"] = df_work["Procent pracy twórczej"].apply(
         extract_creative_percentage
@@ -141,6 +138,7 @@ def process_worklogs_data(df: pd.DataFrame) -> pd.DataFrame:
 @st.cache_data(show_spinner=False)
 def aggregate_worklogs_to_report(df_worklogs: pd.DataFrame) -> pd.DataFrame:
     """Agreguje worklogs do postaci raportu głównego (per person + key + month)."""
+
     # Group by PERSON + TASK + MONTH - każde zadanie per osoba per miesiąc pojawia się raz
     def weighted_creative_percent(group: pd.DataFrame) -> float | None:
         valid = group.dropna(subset=["creative_percent", "time_hours"])
@@ -153,15 +151,21 @@ def aggregate_worklogs_to_report(df_worklogs: pd.DataFrame) -> pd.DataFrame:
         return round(float(weighted_sum / total_hours), 1)
 
     # Agreguj per (person, key, month_str) - to prawidłowe!
-    group_cols = ["person", "key", "month_str"] if "month_str" in df_worklogs.columns else ["person", "key"]
-    
+    group_cols = (
+        ["person", "key", "month_str"]
+        if "month_str" in df_worklogs.columns
+        else ["person", "key"]
+    )
+
     df_agg = df_worklogs.groupby(group_cols, as_index=False).apply(
         lambda group: pd.Series(
             {
                 "time_hours": group["time_hours"].sum(),
                 "creative_hours": group["creative_hours"].sum(),
                 "creative_percent": weighted_creative_percent(group),
-                "start_date_min": group["Start Date"].min() if "Start Date" in group.columns else None,
+                "start_date_min": group["Start Date"].min()
+                if "Start Date" in group.columns
+                else None,
             }
         ),
         include_groups=False,
@@ -170,15 +174,36 @@ def aggregate_worklogs_to_report(df_worklogs: pd.DataFrame) -> pd.DataFrame:
     # Dodaj task (nie ma go po groupby)
     task_mapping = df_worklogs.groupby("key")["task"].first()
     df_agg["task"] = df_agg["key"].map(task_mapping)
-    
+
     # Użyj min daty jako reprezentatywnej dla zadania
     df_agg["Start Date"] = df_agg["start_date_min"]
 
     # Reorder columns
     if "month_str" in df_agg.columns:
-        return df_agg[["person", "task", "key", "time_hours", "creative_percent", "creative_hours", "Start Date", "month_str"]]
+        return df_agg[
+            [
+                "person",
+                "task",
+                "key",
+                "time_hours",
+                "creative_percent",
+                "creative_hours",
+                "Start Date",
+                "month_str",
+            ]
+        ]
     else:
-        return df_agg[["person", "task", "key", "time_hours", "creative_percent", "creative_hours", "Start Date"]]
+        return df_agg[
+            [
+                "person",
+                "task",
+                "key",
+                "time_hours",
+                "creative_percent",
+                "creative_hours",
+                "Start Date",
+            ]
+        ]
 
 
 # =============================================================================
@@ -476,11 +501,13 @@ def render_top_tasks_table(df: pd.DataFrame):
     ]
 
     st.dataframe(
-        display_df[display_cols].rename(columns=dict(zip(display_cols, display_names))).reset_index(drop=True),
+        display_df[display_cols]
+        .rename(columns=dict(zip(display_cols, display_names)))
+        .reset_index(drop=True),
         hide_index=True,
         width="stretch",
     )
-    
+
     st.caption(
         "**Jak czytać tabelę:**\n\n"
         "- **Total Score** = suma score'ów ze wszystkich zadań osoby (używana do rankingu) — identyczna wartość jak w Top Performer\n"
@@ -498,8 +525,16 @@ def render_top_tasks_table(df: pd.DataFrame):
         labels={"total_score": "Total Score", "person": "Osoba"},
         color="total_score",
         color_continuous_scale="Plasma",
-        hover_data={"total_score": ":.1f", "score": ":.2f", "time_hours": True, "creative_hours": True, "creative_percent": True},
-        category_orders={"person": top_tasks_df["person"].tolist()},  # Zachowaj kolejność rankingu
+        hover_data={
+            "total_score": ":.1f",
+            "score": ":.2f",
+            "time_hours": True,
+            "creative_hours": True,
+            "creative_percent": True,
+        },
+        category_orders={
+            "person": top_tasks_df["person"].tolist()
+        },  # Zachowaj kolejność rankingu
     )
     fig.update_layout(
         height=max(CHART_MIN_HEIGHT, len(top_tasks_df) * CHART_ROW_HEIGHT),
@@ -507,7 +542,7 @@ def render_top_tasks_table(df: pd.DataFrame):
         yaxis_title="",
         coloraxis_colorbar_title="Total Score",
     )
-    st.plotly_chart(fig, width='stretch')
+    st.plotly_chart(fig, width="stretch")
 
 
 def render_detailed_data(df: pd.DataFrame):
@@ -596,7 +631,7 @@ def render_detailed_data(df: pd.DataFrame):
                 "✨ Godz. twórcze", width="small"
             ),
         },
-        width='stretch',
+        width="stretch",
         hide_index=True,
     )
 
@@ -624,7 +659,7 @@ def render_charts(df_filtered: pd.DataFrame):
                 labels={"x": "Godziny", "y": "Osoba"},
             )
             fig1.update_layout(height=400)
-            st.plotly_chart(fig1, width='stretch')
+            st.plotly_chart(fig1, width="stretch")
 
         with col2:
             st.markdown("**Rozkład pracy twórczej**")
@@ -671,7 +706,7 @@ def render_charts(df_filtered: pd.DataFrame):
                 )
                 fig2.update_traces(textposition="inside", textinfo="percent+label")
                 fig2.update_layout(height=400, showlegend=False)
-                st.plotly_chart(fig2, width='stretch')
+                st.plotly_chart(fig2, width="stretch")
             else:
                 st.info("Brak danych o pracy twórczej.")
 
@@ -730,7 +765,7 @@ def render_charts(df_filtered: pd.DataFrame):
                     aspect="auto",
                 )
                 fig_heatmap.update_layout(height=400)
-                st.plotly_chart(fig_heatmap, width='stretch')
+                st.plotly_chart(fig_heatmap, width="stretch")
             else:
                 st.info("Brak danych do heatmapy")
 
@@ -766,7 +801,7 @@ def render_charts(df_filtered: pd.DataFrame):
                 yaxis_title="Godziny",
                 xaxis_title="Osoba",
             )
-            st.plotly_chart(fig_comparison, width='stretch')
+            st.plotly_chart(fig_comparison, width="stretch")
 
 
 def render_export_section(df_filtered: pd.DataFrame, creative_summary: pd.DataFrame):
@@ -802,7 +837,7 @@ def render_export_section(df_filtered: pd.DataFrame, creative_summary: pd.DataFr
             data=csv_data,
             file_name=csv_filename,
             mime="text/csv",
-            width='stretch',
+            width="stretch",
         )
 
     with col2:
@@ -812,7 +847,7 @@ def render_export_section(df_filtered: pd.DataFrame, creative_summary: pd.DataFr
             data=excel_buffer,
             file_name=excel_filename,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            width='stretch',
+            width="stretch",
         )
 
 
@@ -830,7 +865,7 @@ def render_worklogs_section(df_worklogs_by_month: dict, months_available: list):
         return
 
     month_data = df_worklogs_by_month[selected_month]
-    
+
     # Agreguj dla statystyk (każde zadanie per osoba pojawia się raz)
     month_data_agg = aggregate_worklogs_to_report(month_data)
 
@@ -848,7 +883,7 @@ def render_worklogs_section(df_worklogs_by_month: dict, months_available: list):
     is_complete = (
         start_date.date() <= first_day.date() and end_date.date() >= last_day.date()
     )
-    status = "✅ Pełny miesiąc" if is_complete else f"⚠️ Część miesiąca"
+    status = "✅ Pełny miesiąc" if is_complete else "⚠️ Część miesiąca"
 
     # Nagłówek
     col1, col2, col3 = st.columns([2, 2, 1])
@@ -914,13 +949,6 @@ def render_worklogs_section(df_worklogs_by_month: dict, months_available: list):
         with extra_col4:
             st.metric("💠 Udział godzin twórczych", f"{creative_hours_ratio:.0f}%")
 
-
-        with col4:
-            st.metric(
-                "⏱️ Średnia długość zadania",
-                f"{summary['avg_task_hours']:.1f}h",
-                delta=f"{summary['creative_hours_ratio']:.0f}% twórczych",
-            )
     # Executive Summary dla miesiąca
     st.markdown("---")
     render_executive_summary(month_data_agg)
@@ -945,7 +973,7 @@ def render_worklogs_section(df_worklogs_by_month: dict, months_available: list):
         barmode="stack",
     )
     fig_timeline.update_layout(height=400, hovermode="x unified")
-    st.plotly_chart(fig_timeline, width='stretch')
+    st.plotly_chart(fig_timeline, width="stretch")
 
     # Top zadania per osoba
     st.markdown("### 🎯 Top zadanie per osoba")
@@ -982,7 +1010,7 @@ def render_worklogs_section(df_worklogs_by_month: dict, months_available: list):
                 }
             ),
             hide_index=True,
-            width='stretch',
+            width="stretch",
         )
 
     # Rozkład po dniach tygodnia
@@ -1005,7 +1033,7 @@ def render_worklogs_section(df_worklogs_by_month: dict, months_available: list):
             labels={"x": "Dzień", "y": "Godziny"},
         )
         fig_day_total.update_layout(height=350)
-        st.plotly_chart(fig_day_total, width='stretch')
+        st.plotly_chart(fig_day_total, width="stretch")
 
     with col2:
         fig_day_avg = px.bar(
@@ -1016,7 +1044,7 @@ def render_worklogs_section(df_worklogs_by_month: dict, months_available: list):
             color_discrete_sequence=["#2ca02c"],
         )
         fig_day_avg.update_layout(height=350)
-        st.plotly_chart(fig_day_avg, width='stretch')
+        st.plotly_chart(fig_day_avg, width="stretch")
 
     # Wykresy analityczne
     st.markdown("---")
@@ -1208,100 +1236,90 @@ def render_worklogs_section(df_worklogs_by_month: dict, months_available: list):
 def render_personal_dashboard(df: pd.DataFrame):
     """Renderuje Personal Dashboard dla wybranego użytkownika."""
     st.markdown("##  👤 Personal Dashboard")
-    
+
     # Debug - pokaż ile użytkowników dostępnych
     if df.empty:
         st.error("❌ Brak danych do wyświetlenia!")
         return
-    
+
     # Sprawdź czy dane mają month_str (z worklogs)
     has_months = "month_str" in df.columns
-    
+
     # Filtry góra
     col_person, col_month = st.columns([2, 1])
-    
+
     with col_person:
         people_list = sorted(df["person"].unique())
-        
+
         if not people_list:
             st.info("Brak danych użytkowników")
             return
-        
+
         st.caption(f"👥 Dostępni użytkownicy: {len(people_list)}")
         selected_person = st.selectbox(
             "👤 Wybierz użytkownika",
             options=people_list,
-            key="personal_dashboard_person_selector"
+            key="personal_dashboard_person_selector",
         )
-    
+
     with col_month:
         if has_months:
             months_available = sorted(df["month_str"].dropna().unique(), reverse=True)
             selected_month = st.selectbox(
                 "📅 Okres",
                 options=["Wszystkie"] + months_available,
-                key="personal_dashboard_month_selector"
+                key="personal_dashboard_month_selector",
             )
         else:
             st.info("💡 Brak podziału na miesiące")
             selected_month = "Wszystkie"
-    
+
     if not selected_person:
         return
-    
+
     # Filtruj dane
     df_filtered = df[df["person"] == selected_person].copy()
     if has_months and selected_month != "Wszystkie":
         df_filtered = df_filtered[df_filtered["month_str"] == selected_month]
-    
+
     # Generuj statystyki
     stats = generate_personal_stats(df_filtered, selected_person)
-    
+
     # Info o okresie
     if selected_month == "Wszystkie":
         if has_months:
-            st.warning("⚠️ **Uwaga:** Statystyki i koszty dotyczą CAŁEGO okresu danych (wszystkie miesiące razem), nie jednego miesiąca!")
+            st.warning(
+                "⚠️ **Uwaga:** Statystyki i koszty dotyczą CAŁEGO okresu danych (wszystkie miesiące razem), nie jednego miesiąca!"
+            )
         else:
             st.info("ℹ️ Statystyki dotyczą całego okresu danych w pliku.")
     else:
         st.success(f"✅ Statystyki dla miesiąca: **{selected_month}**")
-    
+
     st.markdown(f"### 📊 Statystyki dla: **{selected_person}**")
     st.markdown("---")
-    
+
     # METRYKI GŁÓWNE
     col1, col2, col3, col4 = st.columns(4)
-    
+
     with col1:
-        st.metric(
-            label="📅 Liczba zadań",
-            value=stats["num_tasks"]
-        )
-    
+        st.metric(label="📅 Liczba zadań", value=stats["num_tasks"])
+
     with col2:
-        st.metric(
-            label="⏰ Łączne godziny",
-            value=f"{stats['total_hours']:.1f}h"
-        )
-    
+        st.metric(label="⏰ Łączne godziny", value=f"{stats['total_hours']:.1f}h")
+
     with col3:
-        st.metric(
-            label="✨ Godziny twórcze",
-            value=f"{stats['creative_hours']:.1f}h"
-        )
-    
+        st.metric(label="✨ Godziny twórcze", value=f"{stats['creative_hours']:.1f}h")
+
     with col4:
         if stats["creative_percent_avg"] is not None:
             st.metric(
                 label="🎨 Średnia twórczość",
-                value=f"{stats['creative_percent_avg']:.0f}%"
+                value=f"{stats['creative_percent_avg']:.0f}%",
             )
         else:
-            st.metric(
-                label="🎨 Średnia twórczość",
-                value="—"
-            )
-    
+            st.metric(label="🎨 Średnia twórczość", value="—")
+
     st.markdown("---")
 
     # JAKOŚĆ DANYCH I FOKUS
@@ -1309,71 +1327,59 @@ def render_personal_dashboard(df: pd.DataFrame):
     kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
 
     with kpi_col1:
-        st.metric(
-            label="⏱️ Średnia h/zadanie",
-            value=f"{stats['avg_task_hours']:.1f}h"
-        )
+        st.metric(label="⏱️ Średnia h/zadanie", value=f"{stats['avg_task_hours']:.1f}h")
 
     with kpi_col2:
-        st.metric(
-            label="📊 Pokrycie danymi",
-            value=f"{stats['data_coverage']:.0f}%"
-        )
+        st.metric(label="📊 Pokrycie danymi", value=f"{stats['data_coverage']:.0f}%")
 
     with kpi_col3:
         if stats["creative_percent_std"] is not None:
             st.metric(
                 label="📉 Odchylenie % twórczości",
-                value=f"{stats['creative_percent_std']:.1f}%"
+                value=f"{stats['creative_percent_std']:.1f}%",
             )
         else:
-            st.metric(
-                label="📉 Odchylenie % twórczości",
-                value="—"
-            )
+            st.metric(label="📉 Odchylenie % twórczości", value="—")
 
     with kpi_col4:
-        st.metric(
-            label="🎯 Fokus Top3 (udział)",
-            value=f"{stats['focus_index']:.0f}%"
-        )
+        st.metric(label="🎯 Fokus Top3 (udział)", value=f"{stats['focus_index']:.0f}%")
 
     st.markdown("---")
-    
+
     # CREATIVE SCORE
     st.markdown("### 🏆 Creative Score")
     st.metric(
         label="Creative Score (suma wszystkich zadań)",
         value=f"{stats['creative_score']:.1f}",
-        help="Suma (creative_hours × creative_% / 100) ze wszystkich zadań"
+        help="Suma (creative_hours × creative_% / 100) ze wszystkich zadań",
     )
-    
+
     st.markdown("---")
-    
+
     # PERSONALIZOWANY INSIGHT
     insight = generate_personalized_insight(
         stats["categories_breakdown"],
         stats["total_hours"],
-        stats["creative_percent_avg"]
+        stats["creative_percent_avg"],
     )
     st.info(insight)
-    
+
     st.markdown("---")
-    
+
     # KALKULATOR KOSZTÓW
     st.markdown("### 💰 Kalkulator kosztów pracy")
-    
+
     col_salary, col_hours = st.columns(2)
-    
+
     with col_salary:
         brutto_salary = st.number_input(
             "Wynagrodzenie brutto miesięczne (PLN)",
             min_value=0.0,
             value=10000.0,
             step=500.0,
-            key=f"salary_{selected_person}"
+            key=f"salary_{selected_person}",
         )
-    
+
     with col_hours:
         monthly_hours = st.number_input(
             "Godzin roboczych miesięcznie",
@@ -1381,111 +1387,154 @@ def render_personal_dashboard(df: pd.DataFrame):
             value=168,
             step=1,
             help="Standardowo: 168h (21 dni × 8h), opcjonalnie: 160h lub 176h",
-            key=f"hours_{selected_person}"
+            key=f"hours_{selected_person}",
         )
-    
+
     if brutto_salary > 0 and monthly_hours > 0:
         hourly_rate = brutto_salary / monthly_hours
         st.info(f"💵 **Koszt godzinowy:** {hourly_rate:.2f} PLN/h (brutto)")
-        
+
         # Oblicz koszty
         # Jeśli wybrano konkretny miesiąc - koszt = pełne wynagrodzenie miesięczne
         # Jeśli "Wszystkie" - koszt = godziny * stawka
         if selected_month != "Wszystkie":
             total_cost = brutto_salary
             # Creative cost proporcjonalnie
-            creative_cost = (stats["creative_hours"] / stats["total_hours"] * brutto_salary) if stats["total_hours"] > 0 else 0
+            creative_cost = (
+                (stats["creative_hours"] / stats["total_hours"] * brutto_salary)
+                if stats["total_hours"] > 0
+                else 0
+            )
         else:
             total_cost = stats["total_hours"] * hourly_rate
             creative_cost = stats["creative_hours"] * hourly_rate
-        
+
         # Analiza najwartościowszych i najmniej wartościowych zadań
         most_valuable_task = None
         least_valuable_task = None
-        
+
         if not df_filtered.empty and stats["total_hours"] > 0:
             tasks_with_value = df_filtered.copy()
-            
+
             # Oblicz koszt dla każdego zadania
             if selected_month != "Wszystkie":
-                tasks_with_value["task_cost"] = (tasks_with_value["time_hours"] / stats["total_hours"]) * brutto_salary
+                tasks_with_value["task_cost"] = (
+                    tasks_with_value["time_hours"] / stats["total_hours"]
+                ) * brutto_salary
             else:
-                tasks_with_value["task_cost"] = tasks_with_value["time_hours"] * hourly_rate
-            
+                tasks_with_value["task_cost"] = (
+                    tasks_with_value["time_hours"] * hourly_rate
+                )
+
             # Oblicz creative score (wartość twórcza)
             tasks_with_value["task_score"] = (
-                tasks_with_value["creative_hours"] * 
-                tasks_with_value["creative_percent"] / 100
+                tasks_with_value["creative_hours"]
+                * tasks_with_value["creative_percent"]
+                / 100
             )
-            
+
             # Filtruj zadania z danymi o twórczości (creative_percent > 0)
             valuable_tasks = tasks_with_value[
-                (tasks_with_value["creative_percent"].notna()) & 
-                (tasks_with_value["creative_percent"] > 0)
+                (tasks_with_value["creative_percent"].notna())
+                & (tasks_with_value["creative_percent"] > 0)
             ].copy()
-            
+
             # Jeśli brak zadań z twórczością, szukaj w zadaniach z czasem > 0
             if valuable_tasks.empty:
-                valuable_tasks = tasks_with_value[tasks_with_value["time_hours"] > 0].copy()
+                valuable_tasks = tasks_with_value[
+                    tasks_with_value["time_hours"] > 0
+                ].copy()
                 use_score = False
             else:
                 use_score = True
-            
+
             if not valuable_tasks.empty:
                 # Zaawansowane metryki biznesowe
-                
+
                 # Value Density = creative_score / cost (wartość twórcza per PLN)
                 valuable_tasks["value_density"] = valuable_tasks.apply(
-                    lambda row: row["task_score"] / row["task_cost"] if row["task_cost"] > 0 else 0,
-                    axis=1
+                    lambda row: (
+                        row["task_score"] / row["task_cost"]
+                        if row["task_cost"] > 0
+                        else 0
+                    ),
+                    axis=1,
                 )
-                
+
                 # Business Impact = creative_score × creative_percent/100 (całkowita wartość biznesowa)
                 valuable_tasks["business_impact"] = (
-                    valuable_tasks["task_score"] * valuable_tasks["creative_percent"] / 100
+                    valuable_tasks["task_score"]
+                    * valuable_tasks["creative_percent"]
+                    / 100
                 )
-                
+
                 # Non-creative Cost = cost × (1 - creative_percent/100)
-                valuable_tasks["non_creative_cost"] = (
-                    valuable_tasks["task_cost"] * (1 - valuable_tasks["creative_percent"] / 100)
+                valuable_tasks["non_creative_cost"] = valuable_tasks["task_cost"] * (
+                    1 - valuable_tasks["creative_percent"] / 100
                 )
-                
+
                 # Opportunity Loss = hours × (1 - creative_percent/100)
-                valuable_tasks["opportunity_loss"] = (
-                    valuable_tasks["time_hours"] * (1 - valuable_tasks["creative_percent"] / 100)
+                valuable_tasks["opportunity_loss"] = valuable_tasks["time_hours"] * (
+                    1 - valuable_tasks["creative_percent"] / 100
                 )
-                
+
                 # Najwartościowsze = najwyższy Business Impact (największa wartość biznesowa)
                 most_valuable_idx = valuable_tasks["business_impact"].idxmax()
                 most_valuable_task = {
                     "task": valuable_tasks.loc[most_valuable_idx, "task"],
-                    "key": valuable_tasks.loc[most_valuable_idx, "key"] if "key" in valuable_tasks.columns else "—",
+                    "key": valuable_tasks.loc[most_valuable_idx, "key"]
+                    if "key" in valuable_tasks.columns
+                    else "—",
                     "hours": valuable_tasks.loc[most_valuable_idx, "time_hours"],
-                    "creative_percent": valuable_tasks.loc[most_valuable_idx, "creative_percent"],
+                    "creative_percent": valuable_tasks.loc[
+                        most_valuable_idx, "creative_percent"
+                    ],
                     "cost": valuable_tasks.loc[most_valuable_idx, "task_cost"],
                     "score": valuable_tasks.loc[most_valuable_idx, "task_score"],
-                    "business_impact": valuable_tasks.loc[most_valuable_idx, "business_impact"],
-                    "value_density": valuable_tasks.loc[most_valuable_idx, "value_density"],
-                    "creative_cost": (valuable_tasks.loc[most_valuable_idx, "task_cost"] * 
-                                     valuable_tasks.loc[most_valuable_idx, "creative_percent"] / 100)
+                    "business_impact": valuable_tasks.loc[
+                        most_valuable_idx, "business_impact"
+                    ],
+                    "value_density": valuable_tasks.loc[
+                        most_valuable_idx, "value_density"
+                    ],
+                    "creative_cost": (
+                        valuable_tasks.loc[most_valuable_idx, "task_cost"]
+                        * valuable_tasks.loc[most_valuable_idx, "creative_percent"]
+                        / 100
+                    ),
                 }
-                
+
                 # Najmniej wartościowe = najwyższy Non-creative Cost (największy drain budżetu na nietwórcze)
                 least_valuable_idx = valuable_tasks["non_creative_cost"].idxmax()
-                    
+
                 least_valuable_task = {
                     "task": valuable_tasks.loc[least_valuable_idx, "task"],
-                    "key": valuable_tasks.loc[least_valuable_idx, "key"] if "key" in valuable_tasks.columns else "—",
+                    "key": valuable_tasks.loc[least_valuable_idx, "key"]
+                    if "key" in valuable_tasks.columns
+                    else "—",
                     "hours": valuable_tasks.loc[least_valuable_idx, "time_hours"],
-                    "creative_percent": valuable_tasks.loc[least_valuable_idx, "creative_percent"] if "creative_percent" in valuable_tasks.columns else 0,
+                    "creative_percent": valuable_tasks.loc[
+                        least_valuable_idx, "creative_percent"
+                    ]
+                    if "creative_percent" in valuable_tasks.columns
+                    else 0,
                     "cost": valuable_tasks.loc[least_valuable_idx, "task_cost"],
-                    "score": valuable_tasks.loc[least_valuable_idx, "task_score"] if use_score else 0,
-                    "non_creative_cost": valuable_tasks.loc[least_valuable_idx, "non_creative_cost"],
-                    "opportunity_loss": valuable_tasks.loc[least_valuable_idx, "opportunity_loss"],
-                    "creative_cost": (valuable_tasks.loc[least_valuable_idx, "task_cost"] * 
-                                     valuable_tasks.loc[least_valuable_idx, "creative_percent"] / 100)
+                    "score": valuable_tasks.loc[least_valuable_idx, "task_score"]
+                    if use_score
+                    else 0,
+                    "non_creative_cost": valuable_tasks.loc[
+                        least_valuable_idx, "non_creative_cost"
+                    ],
+                    "opportunity_loss": valuable_tasks.loc[
+                        least_valuable_idx, "opportunity_loss"
+                    ],
+                    "creative_cost": (
+                        valuable_tasks.loc[least_valuable_idx, "task_cost"]
+                        * valuable_tasks.loc[least_valuable_idx, "creative_percent"]
+                        / 100
+                    ),
                 }
-        
+
         # Info o okresie
         if selected_month == "Wszystkie":
             st.caption(
@@ -1499,36 +1548,44 @@ def render_personal_dashboard(df: pd.DataFrame):
                 f"Przepracowano {stats['total_hours']:.1f}h z norm {monthly_hours}h, "
                 f"w tym {stats['creative_hours']:.1f}h twórczych."
             )
-        
+
         col_cost1, col_cost2 = st.columns(2)
-        
+
         with col_cost1:
             if selected_month == "Wszystkie":
-                help_text = f"Obliczony dla {stats['total_hours']:.1f}h z wybranego okresu"
+                help_text = (
+                    f"Obliczony dla {stats['total_hours']:.1f}h z wybranego okresu"
+                )
             else:
                 help_text = f"Pełne wynagrodzenie miesięczne za {selected_month}"
             st.metric(
                 label="💸 Koszt całkowity czasu pracy",
                 value=f"{total_cost:,.2f} PLN",
-                help=help_text
+                help=help_text,
             )
-        
+
         with col_cost2:
             if selected_month == "Wszystkie":
                 help_text = f"Koszt {stats['creative_hours']:.1f}h faktycznie twórczych"
             else:
-                help_text = f"{stats['creative_hours']:.1f}h twórczych / {stats['total_hours']:.1f}h łącznie = {stats['creative_hours']/stats['total_hours']*100:.0f}% wynagrodzenia" if stats["total_hours"] > 0 else "Brak godzin"
+                help_text = (
+                    f"{stats['creative_hours']:.1f}h twórczych / {stats['total_hours']:.1f}h łącznie = {stats['creative_hours'] / stats['total_hours'] * 100:.0f}% wynagrodzenia"
+                    if stats["total_hours"] > 0
+                    else "Brak godzin"
+                )
             st.metric(
                 label="💎 Wartość pracy twórczej",
                 value=f"{creative_cost:,.2f} PLN",
-                help=help_text
+                help=help_text,
             )
 
         # Dodatkowe KPI kosztowe
         extra_cost_col1, extra_cost_col2 = st.columns(2)
         non_creative_cost_total = total_cost - creative_cost
         cost_per_creative_hour = (
-            creative_cost / stats["creative_hours"] if stats["creative_hours"] > 0 else 0
+            creative_cost / stats["creative_hours"]
+            if stats["creative_hours"] > 0
+            else 0
         )
         waste_ratio = (
             non_creative_cost_total / total_cost * 100 if total_cost > 0 else 0
@@ -1537,162 +1594,174 @@ def render_personal_dashboard(df: pd.DataFrame):
         with extra_cost_col1:
             st.metric(
                 label="💸 Koszt 1h twórczej",
-                value=f"{cost_per_creative_hour:,.2f} PLN/h"
+                value=f"{cost_per_creative_hour:,.2f} PLN/h",
             )
 
         with extra_cost_col2:
-            st.metric(
-                label="🧯 Udział nietwórczy (koszt)",
-                value=f"{waste_ratio:.0f}%"
-            )
-        
+            st.metric(label="🧯 Udział nietwórczy (koszt)", value=f"{waste_ratio:.0f}%")
+
         st.markdown("---")
-        
+
         # Najbardziej i najmniej wartościowe zadanie
         if most_valuable_task or least_valuable_task:
             st.markdown("### 🎯 Zaawansowana analiza wartości zadań")
-            
+
             col_exp, col_cheap = st.columns(2)
-            
+
             with col_exp:
                 if most_valuable_task:
                     st.markdown("#### 💎 Najwyższa wartość biznesowa")
                     st.markdown(f"**{most_valuable_task['task']}**")
-                    
+
                     # Extrahuj key z tytułu jeśli tam jest (format "XXX-123: ...")
-                    task_title = most_valuable_task['task']
-                    if ':' in task_title:
-                        extracted_key = task_title.split(':')[0].strip()
+                    task_title = most_valuable_task["task"]
+                    if ":" in task_title:
+                        extracted_key = task_title.split(":")[0].strip()
                     else:
-                        extracted_key = most_valuable_task['key']
+                        extracted_key = most_valuable_task["key"]
                     st.caption(f"🔑 {extracted_key}")
-                    
+
                     # Górny rząd metryk
                     col_m1, col_m2 = st.columns(2)
                     with col_m1:
                         st.metric(
                             label="Business Impact",
                             value=f"{most_valuable_task['business_impact']:.2f}",
-                            help="creative_score × (creative_percent/100)"
+                            help="creative_score × (creative_percent/100)",
                         )
                     with col_m2:
                         st.metric(
                             label="Value Density",
                             value=f"{most_valuable_task['value_density']:.3f}",
-                            help="creative value per PLN spent"
+                            help="creative value per PLN spent",
                         )
-                    
+
                     # Środkowy rząd metryk
                     col_m3, col_m4 = st.columns(2)
                     with col_m3:
                         st.metric(
                             label="Creative Score",
-                            value=f"{most_valuable_task['score']:.2f}"
+                            value=f"{most_valuable_task['score']:.2f}",
                         )
                     with col_m4:
                         st.metric(
                             label="Koszt twórczej pracy",
-                            value=f"{most_valuable_task['creative_cost']:,.0f} PLN"
+                            value=f"{most_valuable_task['creative_cost']:,.0f} PLN",
                         )
-                    
+
                     st.caption(
                         f"⏱️ Czas: {most_valuable_task['hours']:.1f}h | "
                         f"🎨 Twórczość: {most_valuable_task['creative_percent']:.0f}% | "
                         f"💸 Koszt całkowity: {most_valuable_task['cost']:,.0f} PLN"
                     )
-            
+
             with col_cheap:
                 if least_valuable_task:
                     st.markdown("#### ⚠️ Największy drain budżetu")
                     st.markdown(f"**{least_valuable_task['task']}**")
-                    
+
                     # Extrahuj key z tytułu jeśli tam jest
-                    task_title = least_valuable_task['task']
-                    if ':' in task_title:
-                        extracted_key = task_title.split(':')[0].strip()
+                    task_title = least_valuable_task["task"]
+                    if ":" in task_title:
+                        extracted_key = task_title.split(":")[0].strip()
                     else:
-                        extracted_key = least_valuable_task['key']
+                        extracted_key = least_valuable_task["key"]
                     st.caption(f"🔑 {extracted_key}")
-                    
+
                     # Górny rząd metryk
                     col_m1, col_m2 = st.columns(2)
                     with col_m1:
                         st.metric(
                             label="Koszt bez wartości",
                             value=f"{least_valuable_task['non_creative_cost']:,.0f} PLN",
-                            help="cost × (1 - creative_percent/100)"
+                            help="cost × (1 - creative_percent/100)",
                         )
                     with col_m2:
                         st.metric(
                             label="Zmarnowane godziny",
                             value=f"{least_valuable_task['opportunity_loss']:.1f}h",
-                            help="hours × (1 - creative_percent/100)"
+                            help="hours × (1 - creative_percent/100)",
                         )
-                    
+
                     # Środkowy rząd metryk
                     col_m3, col_m4 = st.columns(2)
                     with col_m3:
-                        if least_valuable_task['creative_cost'] > 0:
+                        if least_valuable_task["creative_cost"] > 0:
                             st.metric(
                                 label="Koszt pracy twórczej",
-                                value=f"{least_valuable_task['creative_cost']:,.0f} PLN"
+                                value=f"{least_valuable_task['creative_cost']:,.0f} PLN",
                             )
                         else:
-                            st.metric(
-                                label="Koszt pracy twórczej",
-                                value="0 PLN"
-                            )
+                            st.metric(label="Koszt pracy twórczej", value="0 PLN")
                     with col_m4:
                         st.metric(
                             label="Split kosztów",
-                            value=f"{(1 - least_valuable_task['creative_percent']/100)*100:.0f}% drain"
+                            value=f"{(1 - least_valuable_task['creative_percent'] / 100) * 100:.0f}% drain",
                         )
-                    
+
                     st.caption(
                         f"⏱️ Czas: {least_valuable_task['hours']:.1f}h | "
                         f"🎨 Twórczość: {least_valuable_task['creative_percent']:.0f}% | "
                         f"💸 Koszt całkowity: {least_valuable_task['cost']:,.0f} PLN"
                     )
-        
+
         st.markdown("---")
-        
+
         # Koszty per kategoria
         if stats["categories_breakdown"]:
             st.markdown("### 📋 Koszty per kategoria zadań")
-            
+
             categories_cost_data = []
             for cat, data in stats["categories_breakdown"].items():
                 if selected_month != "Wszystkie":
                     # Dla konkretnego miesiąca - proporcjonalnie do udziału godzin
-                    cat_cost = (data["hours"] / stats["total_hours"] * brutto_salary) if stats["total_hours"] > 0 else 0
-                    creative_cat_cost = (data["creative_hours"] / stats["total_hours"] * brutto_salary) if stats["total_hours"] > 0 else 0
+                    cat_cost = (
+                        (data["hours"] / stats["total_hours"] * brutto_salary)
+                        if stats["total_hours"] > 0
+                        else 0
+                    )
+                    creative_cat_cost = (
+                        (data["creative_hours"] / stats["total_hours"] * brutto_salary)
+                        if stats["total_hours"] > 0
+                        else 0
+                    )
                 else:
                     # Dla wszystkich miesięcy - godziny * stawka
                     cat_cost = data["hours"] * hourly_rate
                     creative_cat_cost = data["creative_hours"] * hourly_rate
-                    
-                categories_cost_data.append({
-                    "Kategoria": cat,
-                    "Liczba zadań": data["count"],
-                    "Godziny": data["hours"],
-                    "Koszt [PLN]": cat_cost,
-                    "Godz. twórcze": data["creative_hours"],
-                    "Wartość twórcza [PLN]": creative_cat_cost,
-                })
-            
+
+                categories_cost_data.append(
+                    {
+                        "Kategoria": cat,
+                        "Liczba zadań": data["count"],
+                        "Godziny": data["hours"],
+                        "Koszt [PLN]": cat_cost,
+                        "Godz. twórcze": data["creative_hours"],
+                        "Wartość twórcza [PLN]": creative_cat_cost,
+                    }
+                )
+
             if categories_cost_data:
                 cost_df = pd.DataFrame(categories_cost_data)
                 cost_df = cost_df.sort_values("Koszt [PLN]", ascending=False)
-                
+
                 # Formatuj
                 cost_df_display = cost_df.copy()
-                cost_df_display["Godziny"] = cost_df_display["Godziny"].apply(lambda x: f"{x:.1f}h")
-                cost_df_display["Koszt [PLN]"] = cost_df_display["Koszt [PLN]"].apply(lambda x: f"{x:,.2f}")
-                cost_df_display["Godz. twórcze"] = cost_df_display["Godz. twórcze"].apply(lambda x: f"{x:.1f}h")
-                cost_df_display["Wartość twórcza [PLN]"] = cost_df_display["Wartość twórcza [PLN]"].apply(lambda x: f"{x:,.2f}")
-                
+                cost_df_display["Godziny"] = cost_df_display["Godziny"].apply(
+                    lambda x: f"{x:.1f}h"
+                )
+                cost_df_display["Koszt [PLN]"] = cost_df_display["Koszt [PLN]"].apply(
+                    lambda x: f"{x:,.2f}"
+                )
+                cost_df_display["Godz. twórcze"] = cost_df_display[
+                    "Godz. twórcze"
+                ].apply(lambda x: f"{x:.1f}h")
+                cost_df_display["Wartość twórcza [PLN]"] = cost_df_display[
+                    "Wartość twórcza [PLN]"
+                ].apply(lambda x: f"{x:,.2f}")
+
                 st.dataframe(cost_df_display, width="stretch", hide_index=True)
-                
+
                 if selected_month != "Wszystkie":
                     st.caption(
                         f"✅ Koszty per kategoria obliczone proporcjonalnie do udziału godzin. "
@@ -1700,10 +1769,10 @@ def render_personal_dashboard(df: pd.DataFrame):
                     )
                 else:
                     st.caption(
-                        f"⚠️ Koszty obliczone jako (godziny × stawka godzinowa) dla całego okresu. "
-                        f"Wybierz konkretny miesiąc powyżej, żeby zobaczyć podział wynagrodzenia miesięcznego."
+                        "⚠️ Koszty obliczone jako (godziny × stawka godzinowa) dla całego okresu. "
+                        "Wybierz konkretny miesiąc powyżej, żeby zobaczyć podział wynagrodzenia miesięcznego."
                     )
-                
+
                 # Wykres kosztów
                 fig_cost = px.bar(
                     cost_df,
@@ -1717,21 +1786,36 @@ def render_personal_dashboard(df: pd.DataFrame):
                 )
                 fig_cost.update_layout(height=400)
                 st.plotly_chart(fig_cost, width="stretch")
-    
+
     st.markdown("---")
-    
+
     # TOP ZADANIA
     if stats["top_tasks_df"] is not None and not stats["top_tasks_df"].empty:
         st.markdown("### 🎯 Top 10 zadań (według Creative Score)")
-        
+
         top_tasks_display = stats["top_tasks_df"].copy()
-        top_tasks_display["time_hours"] = top_tasks_display["time_hours"].apply(lambda x: f"{x:.1f}h")
-        top_tasks_display["creative_percent"] = top_tasks_display["creative_percent"].apply(lambda x: f"{int(x)}%")
-        top_tasks_display["creative_hours"] = top_tasks_display["creative_hours"].apply(lambda x: f"{x:.1f}h")
-        top_tasks_display["task_score"] = top_tasks_display["task_score"].apply(lambda x: f"{x:.2f}")
-        
-        top_tasks_display.columns = ["📋 Zadanie", "🔑 Klucz", "⏰ Czas", "🎨 %", "✨ Godz. twórcze", "💎 Score"]
-        
+        top_tasks_display["time_hours"] = top_tasks_display["time_hours"].apply(
+            lambda x: f"{x:.1f}h"
+        )
+        top_tasks_display["creative_percent"] = top_tasks_display[
+            "creative_percent"
+        ].apply(lambda x: f"{int(x)}%")
+        top_tasks_display["creative_hours"] = top_tasks_display["creative_hours"].apply(
+            lambda x: f"{x:.1f}h"
+        )
+        top_tasks_display["task_score"] = top_tasks_display["task_score"].apply(
+            lambda x: f"{x:.2f}"
+        )
+
+        top_tasks_display.columns = [
+            "📋 Zadanie",
+            "🔑 Klucz",
+            "⏰ Czas",
+            "🎨 %",
+            "✨ Godz. twórcze",
+            "💎 Score",
+        ]
+
         st.dataframe(top_tasks_display, width="stretch", hide_index=True)
 
 
@@ -1783,7 +1867,7 @@ def render_help_tab():
             "Total Time Spent": ["", "10:00", "", "5:30", ""],
         }
     )
-    st.dataframe(example_data, width='stretch')
+    st.dataframe(example_data, width="stretch")
 
 
 # =============================================================================
@@ -1851,7 +1935,9 @@ def main():
             required_columns = ["Level", "Users / Issues / Procent pracy twórczej"]
             if all(col in df_totals_raw.columns for col in required_columns):
                 df_totals_raw["Level"] = (
-                    pd.to_numeric(df_totals_raw["Level"], errors="coerce").fillna(0).astype(int)
+                    pd.to_numeric(df_totals_raw["Level"], errors="coerce")
+                    .fillna(0)
+                    .astype(int)
                 )
 
                 with st.spinner("⚙️ Przetwarzam raport..."):
@@ -1874,8 +1960,7 @@ def main():
             # Trzymaj surowe worklogi per miesiąc (NIE AGREGUJ)
             # Agregacja będzie robiona lokalnie tam gdzie jest potrzebna
             df_worklogs_by_month = {
-                month: group.copy()
-                for month, group in df_worklogs.groupby("month_str")
+                month: group.copy() for month, group in df_worklogs.groupby("month_str")
             }
             months_available = sorted(df_worklogs_by_month.keys(), reverse=True)
 
@@ -1929,13 +2014,15 @@ def main():
             # Użyj df_processed_full które już mają zagregowane (person, key)
             df_for_personal = df_processed_full.copy()
             # Filtruj wykluczone osoby
-            df_for_personal = df_for_personal[~df_for_personal["person"].isin(EXCLUDED_PEOPLE)].copy()
-            
+            df_for_personal = df_for_personal[
+                ~df_for_personal["person"].isin(EXCLUDED_PEOPLE)
+            ].copy()
+
             # Debug info
             if df_for_personal.empty:
                 st.error("❌ Brak danych po filtracji!")
                 st.info(f"Processed rows: {len(df_processed_full)}")
-            
+
             render_personal_dashboard(df_for_personal)
 
         # TAB 3 (lub 2): POMOC
