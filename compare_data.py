@@ -34,15 +34,15 @@ print(f"Totals:   {df_totals.shape[0]:,} wierszy x {df_totals.shape[1]} kolumn")
 print(f"Worklogs: {df_worklogs.shape[0]:,} wierszy x {df_worklogs.shape[1]} kolumn")
 
 print(f"\nIssue Keys (unikalnych):")
-if 'Key' in df_totals.columns:
-    totals_keys = set(df_totals['Key'].dropna().unique())
+if "Key" in df_totals.columns:
+    totals_keys = set(df_totals["Key"].dropna().unique())
     print(f"  Totals: {len(totals_keys)} unikatowych keys")
 
-if 'Issue Key' in df_worklogs.columns:
-    worklogs_keys = set(df_worklogs['Issue Key'].dropna().unique())
+if "Issue Key" in df_worklogs.columns:
+    worklogs_keys = set(df_worklogs["Issue Key"].dropna().unique())
     print(f"  Worklogs: {len(worklogs_keys)} unikatowych keys")
-    
-    if 'Key' in df_totals.columns:
+
+    if "Key" in df_totals.columns:
         overlap = totals_keys & worklogs_keys
         only_totals = len(totals_keys - worklogs_keys)
         only_worklogs = len(worklogs_keys - totals_keys)
@@ -52,10 +52,16 @@ if 'Issue Key' in df_worklogs.columns:
 
 print(f"\nKolumny tworzysci:")
 for df, name in [(df_totals, "Totals"), (df_worklogs, "Worklogs")]:
-    creative_cols = [c for c in df.columns if 'procent' in c.lower() or 'creative' in c.lower()]
+    creative_cols = [
+        c for c in df.columns if "procent" in c.lower() or "creative" in c.lower()
+    ]
     print(f"  {name}: {creative_cols}")
 
 print(f"\nKolumny czasowe:")
 for df, name in [(df_totals, "Totals"), (df_worklogs, "Worklogs")]:
-    time_cols = [c for c in df.columns if 'time' in c.lower() or 'date' in c.lower() or 'hour' in c.lower()]
+    time_cols = [
+        c
+        for c in df.columns
+        if "time" in c.lower() or "date" in c.lower() or "hour" in c.lower()
+    ]
     print(f"  {name}: {time_cols}")
