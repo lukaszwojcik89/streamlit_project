@@ -169,7 +169,7 @@ for cat, kws in keywords.items():
                     .apply(lambda x: int(x[0]) + int(x[1]) / 60 if len(x) == 2 else 0)
                     .sum()
                 )
-            except:
+            except Exception:
                 hours = 0
         else:
             hours = 0
