@@ -24,6 +24,7 @@ Aplikacja webowa do analizy czasu pracy i procentu pracy twórczej na podstawie 
 ### ⚡ Opcja 1: Automatyczna instalacja (REKOMENDOWANA)
 
 #### Windows
+
 ```bash
 # 1. Klonowanie repozytorium
 git clone <repo-url>
@@ -34,6 +35,7 @@ setup.bat
 ```
 
 #### macOS / Linux
+
 ```bash
 # 1. Klonowanie repozytorium
 git clone <repo-url>
@@ -44,6 +46,7 @@ bash setup.sh
 ```
 
 Skrypt automatycznie:
+
 - ✅ Sprawdza czy Python 3.10+ jest zainstalowany
 - ✅ Tworzy wirtualne środowisko
 - ✅ Instaluje wszystkie zależności z requirements.txt
@@ -54,13 +57,9 @@ Skrypt automatycznie:
 
 ### 📋 Opcja 2: Manualna instalacja (krok po kroku)
 
-#### Windows
-```bash
-# 1. Klonowanie repozytorium
-git clone <repo-url>
-cd misc
+#### Windows (manual)
 
-# 2. Utworzenie środowiska wirtualnego
+```bash
 python -m venv .venv
 
 # 3. Aktywacja środowiska
@@ -73,7 +72,8 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-#### macOS / Linux
+#### macOS / Linux (manual)
+
 ```bash
 # 1. Klonowanie repozytorium
 git clone <repo-url>
@@ -98,7 +98,7 @@ streamlit run app.py
 
 ## 📂 Struktura projektu
 
-```
+```text
 misc/
 ├── app.py                    # Główna aplikacja Streamlit
 ├── helpers.py                # Funkcje pomocnicze (parsowanie, formatowanie)
@@ -116,14 +116,12 @@ misc/
 
 ## 📥 Przygotowanie danych
 
-## 📥 Przygotowanie danych
-
 ### Worklogs (💡 PRIMARY - główne źródło)
 
 Eksport z Jiry zawierający:
 
 | Kolumna | Opis |
-|---------|------|
+| --------- | ------ |
 | **Author** | Osoba, która logowała czas |
 | **Issue Key** | Klucz zadania (np. AOTM-123) |
 | **Issue Summary** | Nazwa zadania/problemu |
@@ -141,7 +139,7 @@ Aplikacja automatycznie agreguje wpisy (każda osoba per każde zadanie).
 Dla porównania danych. Struktura:
 
 | Level | Users / Issues / Procent pracy twórczej | Key | Total Time Spent |
-|-------|----------------------------------------|-----|------------------|
+| ------- | ---------------------------------------- | ----- | ------------------ |
 | 0 | Jan Kowalski | | |
 | 1 | Implementacja modułu | PROJ-123 | 10:00 |
 | 2 | 90 | | |
@@ -184,11 +182,13 @@ Dedykowana zakładka do analizy pracy indywidualnej z kalkulatorem wynagrodzeń:
 ### Logika kalkulacji kosztów
 
 **Dla konkretnego miesiąca:**
+
 - Koszt całkowity = pełne wynagrodzenie miesięczne
 - Koszty per kategoria = proporcjonalne do udziału godzin w wynagrodzeniu
 - Przykład: 16,000 PLN wynagrodzenia, 100h w miesiącu, 40h dla kategorii Development → koszt Development = (40/100) × 16,000 = 6,400 PLN
 
 **Dla "Wszystkie" miesiące:**
+
 - Koszt całkowity = łączne godziny × stawka godzinowa
 - Koszty per kategoria = godziny kategorii × stawka godzinowa
 - Przykład: 250h łącznie, 100 PLN/h, 40h Development → koszt Development = 40 × 100 = 4,000 PLN
@@ -198,7 +198,7 @@ Dedykowana zakładka do analizy pracy indywidualnej z kalkulatorem wynagrodzeń:
 Personal Dashboard automatycznie kategoryzuje zadania na podstawie słów kluczowych w nazwie:
 
 | Kategoria | Słowa kluczowe |
-|-----------|---|
+| ----------- | --- |
 | **Bug/Hotfix** | bug, hotfix, crash, błąd, error, napr, fix |
 | **Code Review** | review, pull request, pr, code review |
 | **Testing** | test, qa, validation, testy, testowani |
@@ -209,9 +209,7 @@ Personal Dashboard automatycznie kategoryzuje zadania na podstawie słów kluczo
 | **Administracja/Support** | administraj, support, incident, help, wsparci |
 | **Spotkania/Sesje** | meeting, standup, retro, planning, scrum |
 
-
-
-```
+```text
 1. Wgraj Worklogs (.xlsx)
    ↓
 2. Aplikacja przetwarza dane
