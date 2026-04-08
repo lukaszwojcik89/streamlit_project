@@ -298,7 +298,7 @@ def render_top_tasks_table(df: pd.DataFrame):
     st.dataframe(
         display_df[display_cols].rename(columns=dict(zip(display_cols, display_names))),
         hide_index=True,
-        width='stretch',
+        width="stretch",
     )
 
     # Wykres
@@ -319,7 +319,7 @@ def render_top_tasks_table(df: pd.DataFrame):
         yaxis_title="",
         coloraxis_colorbar_title="% Twórczości",
     )
-    st.plotly_chart(fig, width='stretch')
+    st.plotly_chart(fig, width="stretch")
 
 
 def render_detailed_data(df: pd.DataFrame):
@@ -408,7 +408,7 @@ def render_detailed_data(df: pd.DataFrame):
                 "✨ Godz. twórcze", width="small"
             ),
         },
-        width='stretch',
+        width="stretch",
         hide_index=True,
     )
 
@@ -424,7 +424,7 @@ def render_detailed_data(df: pd.DataFrame):
             "% Pracy twórczej": st.column_config.NumberColumn(format="%.1f%%"),
             "Pokrycie danymi": st.column_config.NumberColumn(format="%.0f%%"),
         },
-        width='stretch',
+        width="stretch",
     )
 
     return df_filtered, display_df
@@ -451,7 +451,7 @@ def render_charts(df_filtered: pd.DataFrame):
                 labels={"x": "Godziny", "y": "Osoba"},
             )
             fig1.update_layout(height=400)
-            st.plotly_chart(fig1, width='stretch')
+            st.plotly_chart(fig1, width="stretch")
 
         with col2:
             st.markdown("**Rozkład pracy twórczej**")
@@ -467,7 +467,7 @@ def render_charts(df_filtered: pd.DataFrame):
                     title="Zadania według poziomu twórczości",
                 )
                 fig2.update_layout(height=400)
-                st.plotly_chart(fig2, width='stretch')
+                st.plotly_chart(fig2, width="stretch")
             else:
                 st.info("Brak danych o pracy twórczej.")
 
@@ -496,7 +496,7 @@ def render_charts(df_filtered: pd.DataFrame):
                     aspect="auto",
                 )
                 fig_heatmap.update_layout(height=400)
-                st.plotly_chart(fig_heatmap, width='stretch')
+                st.plotly_chart(fig_heatmap, width="stretch")
             else:
                 st.info("Brak danych do heatmapy")
 
@@ -532,7 +532,7 @@ def render_charts(df_filtered: pd.DataFrame):
                 yaxis_title="Godziny",
                 xaxis_title="Osoba",
             )
-            st.plotly_chart(fig_comparison, width='stretch')
+            st.plotly_chart(fig_comparison, width="stretch")
 
 
 def render_export_section(df_filtered: pd.DataFrame, creative_summary: pd.DataFrame):
@@ -568,7 +568,7 @@ def render_export_section(df_filtered: pd.DataFrame, creative_summary: pd.DataFr
             data=csv_data,
             file_name=csv_filename,
             mime="text/csv",
-            width='stretch',
+            width="stretch",
         )
 
     with col2:
@@ -578,7 +578,7 @@ def render_export_section(df_filtered: pd.DataFrame, creative_summary: pd.DataFr
             data=excel_buffer,
             file_name=excel_filename,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            width='stretch',
+            width="stretch",
         )
 
 
@@ -669,7 +669,7 @@ def render_worklogs_section(df_worklogs_by_month: dict, months_available: list):
         barmode="stack",
     )
     fig_timeline.update_layout(height=400, hovermode="x unified")
-    st.plotly_chart(fig_timeline, width='stretch')
+    st.plotly_chart(fig_timeline, width="stretch")
 
     # Top zadania per osoba
     st.markdown("### 🎯 Top zadanie per osoba")
@@ -706,7 +706,7 @@ def render_worklogs_section(df_worklogs_by_month: dict, months_available: list):
                 }
             ),
             hide_index=True,
-            width='stretch',
+            width="stretch",
         )
 
     # Rozkład po dniach tygodnia
@@ -729,7 +729,7 @@ def render_worklogs_section(df_worklogs_by_month: dict, months_available: list):
             labels={"x": "Dzień", "y": "Godziny"},
         )
         fig_day_total.update_layout(height=350)
-        st.plotly_chart(fig_day_total, width='stretch')
+        st.plotly_chart(fig_day_total, width="stretch")
 
     with col2:
         fig_day_avg = px.bar(
@@ -740,7 +740,7 @@ def render_worklogs_section(df_worklogs_by_month: dict, months_available: list):
             color_discrete_sequence=["#2ca02c"],
         )
         fig_day_avg.update_layout(height=350)
-        st.plotly_chart(fig_day_avg, width='stretch')
+        st.plotly_chart(fig_day_avg, width="stretch")
 
     # Eksport worklogs
     st.markdown("### 📥 Eksport miesiąca")
@@ -817,7 +817,7 @@ def render_help_tab():
             "Total Time Spent": ["", "10:00", "", "5:30", ""],
         }
     )
-    st.dataframe(example_data, width='stretch')
+    st.dataframe(example_data, width="stretch")
 
 
 # =============================================================================
