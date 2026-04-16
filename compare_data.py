@@ -15,7 +15,7 @@ print("-" * 80)
 df_totals = pd.read_excel(totals_file)
 print(f"Wymiary: {df_totals.shape}")
 print(f"Kolumny: {list(df_totals.columns)}")
-print(f"\nPiersze 3 wiersze:")
+print("\nPiersze 3 wiersze:")
 print(df_totals.head(3))
 
 # === WORKLOGS ===
@@ -24,7 +24,7 @@ print("-" * 80)
 df_worklogs = pd.read_excel(worklogs_file)
 print(f"Wymiary: {df_worklogs.shape}")
 print(f"Kolumny: {list(df_worklogs.columns)}")
-print(f"\nPiersze 3 wiersze:")
+print("\nPiersze 3 wiersze:")
 print(df_worklogs.head(3))
 
 # === POROWNANIE ===
@@ -33,7 +33,7 @@ print("-" * 80)
 print(f"Totals:   {df_totals.shape[0]:,} wierszy x {df_totals.shape[1]} kolumn")
 print(f"Worklogs: {df_worklogs.shape[0]:,} wierszy x {df_worklogs.shape[1]} kolumn")
 
-print(f"\nIssue Keys (unikalnych):")
+print("\nIssue Keys (unikalnych):")
 if "Key" in df_totals.columns:
     totals_keys = set(df_totals["Key"].dropna().unique())
     print(f"  Totals: {len(totals_keys)} unikatowych keys")
@@ -50,14 +50,14 @@ if "Issue Key" in df_worklogs.columns:
         print(f"  Tylko w Totals: {only_totals}")
         print(f"  Tylko w Worklogs: {only_worklogs}")
 
-print(f"\nKolumny tworzysci:")
+print("\nKolumny tworzysci:")
 for df, name in [(df_totals, "Totals"), (df_worklogs, "Worklogs")]:
     creative_cols = [
         c for c in df.columns if "procent" in c.lower() or "creative" in c.lower()
     ]
     print(f"  {name}: {creative_cols}")
 
-print(f"\nKolumny czasowe:")
+print("\nKolumny czasowe:")
 for df, name in [(df_totals, "Totals"), (df_worklogs, "Worklogs")]:
     time_cols = [
         c
