@@ -609,8 +609,43 @@ def render_metrics(df: pd.DataFrame, selected_month: str = "Wszystkie"):
         creative_tasks = df["creative_percent"].notna().sum()
         st.metric("🎨 Zadania z %", creative_tasks)
 
+    # Pokaż zakres danych gdy wybrano "Wszystkie"
+    if selected_month == "Wszystkie" and "month_str" in df.columns:
+        months_in_df = sorted(df["month_str"].dropna().unique())
+        if len(months_in_df) > 1:
+            st.caption(
+                f"📅 Dane zbiorcze za {len(months_in_df)} miesięcy: "
+                f"{months_in_df[0]} – {months_in_df[-1]}"
+            )
+        elif len(months_in_df) == 1:
+            st.caption(f"📅 Dane za: {months_in_df[0]}")
 
-def render_executive_summary(df: pd.DataFrame):
+
+def _render_ai_observation_tiles(text: str):
+    """Parsuje odpowiedź AI i wyświetla każdą obserwację jako kafelek st.info()."""
+
+    # Rozdziel linie, każda niepusta linia zaczynająca się od emoji lub "- " to osobna obserwacja
+    lines = [ln.strip().lstrip("- ").strip() for ln in text.splitlines()]
+    observations = [ln for ln in lines if ln and not ln.startswith("#")]
+
+    # Wyświetl w dwóch kolumnach jak rule-based
+    col_a, col_b = st.columns(2)
+    for i, obs in enumerate(observations):
+        with col_a if i % 2 == 0 else col_b:
+            # Dobierz typ kafelka na podstawie emoji
+            if any(c in obs[:4] for c in ("⛔", "🔴")):
+                st.error(obs)
+            elif any(c in obs[:4] for c in ("⚠️", "📉")):
+                st.warning(obs)
+            elif any(c in obs[:4] for c in ("✅", "🏆", "💪")):
+                st.success(obs)
+            else:
+                st.info(obs)
+
+
+def render_executive_summary(
+    df: pd.DataFrame, selected_month: str = "Wszystkie", show_ai: bool = True
+):
     """Renderuje Executive Summary - kluczowe insights jako tabele."""
     summary = generate_executive_summary(df)
 
@@ -713,6 +748,49 @@ def render_executive_summary(df: pd.DataFrame):
         "Godziny twórcze ÷ Łączne godziny (tylko dla zadań z przypisanym % twórczości)."
     )
 
+    # Wykres godzin: łączne vs twórcze per osoba
+    if not creative_summary.empty:
+        chart_df = creative_summary.reset_index().rename(
+            columns={
+                "index": "person",
+                "Łączne godziny": "total",
+                "Godziny twórcze": "creative",
+            }
+        )
+        chart_df = chart_df.sort_values("total", ascending=True)
+        fig_cs = go.Figure()
+        fig_cs.add_trace(
+            go.Bar(
+                y=chart_df["person"],
+                x=chart_df["total"],
+                name="Łączne godziny",
+                orientation="h",
+                marker_color="#4a4a6a",
+            )
+        )
+        fig_cs.add_trace(
+            go.Bar(
+                y=chart_df["person"],
+                x=chart_df["creative"],
+                name="Godziny twórcze",
+                orientation="h",
+                marker=dict(
+                    color=chart_df["creative"], colorscale="Plasma", showscale=False
+                ),
+            )
+        )
+        fig_cs.update_layout(
+            barmode="overlay",
+            height=max(CHART_MIN_HEIGHT, len(chart_df) * CHART_ROW_HEIGHT),
+            xaxis_title="Godziny",
+            yaxis_title="",
+            legend=dict(
+                orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
+            ),
+            margin=dict(l=0, r=0, t=30, b=0),
+        )
+        st.plotly_chart(fig_cs, width="stretch")
+
     # EFEKTYWNOŚĆ
     if summary["efficiency_table"] is not None:
         st.markdown("### ⚡ Analiza efektywności")
@@ -739,7 +817,7 @@ def render_executive_summary(df: pd.DataFrame):
         st.caption("Najczęstsze pary współpracujące nad wspólnymi zadaniami")
 
     # DODATKOWE STATYSTYKI
-    with st.expander("📊 Dodatkowe statystyki", expanded=True):
+    with st.expander("📊 Dodatkowe statystyki", expanded=False):
         # PRODUKTYWNOŚĆ
         if summary["productivity_table"] is not None:
             st.markdown("#### 📊 Produktywność zespołu")
@@ -1267,9 +1345,9 @@ def render_worklogs_section(df_worklogs_by_month: dict, months_available: list):
         with extra_col4:
             st.metric("💠 Udział godzin twórczych", f"{creative_hours_ratio:.0f}%")
 
-    # Executive Summary dla miesiąca
+    # Executive Summary dla miesiąca (bez AI — analiza AI tylko na głównym Dashboard)
     st.markdown("---")
-    render_executive_summary(month_data_agg)
+    render_executive_summary(month_data_agg, show_ai=False)
     st.markdown("---")
 
     # Timeline
@@ -2295,8 +2373,16 @@ def main():
 
         # TAB 0: DASHBOARD
         with tab_objects[0]:
+            # Team Health + Anomalie (góra strony)
+            col_health, col_alerts = st.columns([1, 2])
+            with col_health:
+                render_team_health(df_processed)
+            with col_alerts:
+                render_anomaly_alerts(df_processed)
+            st.markdown("---")
+
             # Executive Summary
-            render_executive_summary(df_processed)
+            render_executive_summary(df_processed, selected_month)
             st.markdown("---")
 
             # Ranking Creative Score
