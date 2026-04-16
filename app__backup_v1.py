@@ -12,9 +12,7 @@ import plotly.graph_objects as go
 
 from helpers import (
     parse_time_to_hours,
-    hours_to_hm_format,
     extract_creative_percentage,
-    fix_polish_encoding,
     apply_encoding_fix_to_dataframe,
     get_top_task_per_person,
     format_display_table,
@@ -32,8 +30,6 @@ from export_utils import (
 from config import (
     MAX_FILE_SIZE_MB,
     LARGE_FILE_WARNING_MB,
-    TABLE_HEADERS_WITH_EMOJI,
-    TABLE_HEADERS_PLAIN,
     DAY_NAMES_PL,
     DAY_ORDER,
     CHART_MIN_HEIGHT,
