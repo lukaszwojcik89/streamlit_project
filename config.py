@@ -5,7 +5,7 @@ Centralizuje wszystkie "magic numbers", progi kolorów, etykiety i szerokości k
 """
 
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import List, Tuple
 
 # =============================================================================
 # PROGI KOLORÓW DLA PROCENTÓW TWÓRCZOŚCI
