@@ -691,40 +691,80 @@ def render_executive_summary(
 
     has_any = top3 or other_cats or team
     if has_any:
-        st.markdown("### Kluczowe obserwacje")
+        _has_ai = bool(os.getenv("OPENROUTER_API_KEY", "").strip()) and show_ai
+        _has_ai_result = "ai_full" in st.session_state and show_ai
 
-        def _severity(text: str) -> int:
-            if "⛔" in text:
-                return 4
-            if "⚠️" in text or "📉" in text:
-                return 3
-            if "📋" in text:
-                return 2
-            return 1
+        obs_col, btn_col = st.columns([6, 2])
+        with obs_col:
+            st.markdown(
+                "### 🤖 Kluczowe obserwacje"
+                if _has_ai_result
+                else "### Kluczowe obserwacje"
+            )
+        with btn_col:
+            if _has_ai:
+                _btn_label = (
+                    "🔄 Odśwież analizę" if _has_ai_result else "✨ Analizuj z AI"
+                )
+                if st.button(_btn_label, key="refresh_obs", use_container_width=True):
+                    with st.spinner("Analizuję dane..."):
+                        try:
+                            _full_text, _ = call_openrouter(
+                                df, selected_month, mode="full"
+                            )
+                            st.session_state["ai_full"] = _full_text
+                            st.session_state["ai_full_hash"] = _data_hash(
+                                df, selected_month
+                            )
+                            # Wyczyść stare klucze z poprzedniej wersji
+                            st.session_state.pop("ai_observations", None)
+                            st.session_state.pop("ai_summary", None)
+                        except Exception as _exc:
+                            st.warning(f"AI niedostępne: {_exc}")
 
-        # Top 2 z kolejnych kategorii (poza top 3) — wg wagi
-        secondary = sorted(other_cats, key=_severity, reverse=True)[:2]
-        # Top 2 z insightów teamowych — wg wagi
-        team_sel = sorted(team, key=_severity, reverse=True)[:2]
+        if _has_ai_result:
+            # Podziel odpowiedź na obserwacje i rekomendacje
+            _raw = st.session_state["ai_full"]
+            _parts = _raw.split("===REKOMENDACJE===")
+            _obs_part = _parts[0].strip()
+            _rec_part = _parts[1].strip() if len(_parts) > 1 else ""
 
-        visible = top3 + secondary + team_sel
+            _render_ai_observation_tiles(_obs_part)
 
-        col_a, col_b = st.columns(2)
-        for i, insight in enumerate(visible):
-            with col_a if i % 2 == 0 else col_b:
-                st.info(insight)
+            if _rec_part:
+                st.markdown("---")
+                st.markdown("### 💡 Rekomendacje dla managera")
+                st.markdown(_rec_part)
+        else:
 
-        # Expander z resztą
-        remaining_all = (
-            sorted(other_cats, key=_severity, reverse=True)[2:]
-            + sorted(team, key=_severity, reverse=True)[2:]
-        )
-        if remaining_all:
-            with st.expander(f"Pozostałe obserwacje ({len(remaining_all)})"):
-                col_c, col_d = st.columns(2)
-                for i, insight in enumerate(remaining_all):
-                    with col_c if i % 2 == 0 else col_d:
-                        st.info(insight)
+            def _severity(text: str) -> int:
+                if "⛔" in text:
+                    return 4
+                if "⚠️" in text or "📉" in text:
+                    return 3
+                if "📋" in text:
+                    return 2
+                return 1
+
+            secondary = sorted(other_cats, key=_severity, reverse=True)[:2]
+            team_sel = sorted(team, key=_severity, reverse=True)[:2]
+            visible = top3 + secondary + team_sel
+
+            col_a, col_b = st.columns(2)
+            for i, insight in enumerate(visible):
+                with col_a if i % 2 == 0 else col_b:
+                    st.info(insight)
+
+            remaining_all = (
+                sorted(other_cats, key=_severity, reverse=True)[2:]
+                + sorted(team, key=_severity, reverse=True)[2:]
+            )
+            if remaining_all:
+                with st.expander(f"Pozostałe obserwacje ({len(remaining_all)})"):
+                    col_c, col_d = st.columns(2)
+                    for i, insight in enumerate(remaining_all):
+                        with col_c if i % 2 == 0 else col_d:
+                            st.info(insight)
 
     # Tabele z danymi
     st.markdown("---")
