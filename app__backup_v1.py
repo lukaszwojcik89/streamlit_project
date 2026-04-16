@@ -607,7 +607,7 @@ def render_worklogs_section(df_worklogs_by_month: dict, months_available: list):
     is_complete = (
         start_date.date() <= first_day.date() and end_date.date() >= last_day.date()
     )
-    status = "✅ Pełny miesiąc" if is_complete else f"⚠️ Część miesiąca"
+    status = "✅ Pełny miesiąc" if is_complete else "⚠️ Część miesiąca"
 
     # Nagłówek
     col1, col2, col3 = st.columns([2, 2, 1])
