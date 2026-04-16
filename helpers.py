@@ -476,6 +476,78 @@ def validate_data_structure(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
 
 
 # =============================================================================
+# SZACOWANIE WYMIARU ETATU
+# =============================================================================
+
+# Typowe ułamki etatu z ich wartościami dziesiętnych i etykietami
+_FTE_FRACTIONS: List[Tuple[float, str]] = [
+    (0.25, "1/4"),
+    (0.333, "1/3"),
+    (0.40, "2/5"),
+    (0.50, "1/2"),
+    (0.60, "3/5"),
+    (0.667, "2/3"),
+    (0.75, "3/4"),
+    (0.80, "4/5"),
+    (1.00, "pełny"),
+]
+
+
+def estimate_fte(
+    hours_per_person: "pd.Series",
+) -> "Dict[str, Dict[str, Any]]":
+    """Szacuje wymiar etatu dla każdej osoby na podstawie przepracowanych godzin.
+
+    Osoby przepracowujące ≥90 % mediany godzin zespołu traktowane są jako pełny etat.
+    Pozostałe dopasowywane są do najbliższego typowego ułamka.
+
+    Args:
+        hours_per_person: Series z indeksem = person i wartościami = łączne godziny.
+
+    Returns:
+        Słownik {person: {"fte_ratio": float, "fte_label": str, "is_part_time": bool}}
+    """
+    if hours_per_person.empty:
+        return {}
+
+    # Mediana godzin pełnoetatowców (górna połowa rozkładu godzin)
+    sorted_hours = hours_per_person.sort_values(ascending=False)
+    top_half = sorted_hours.iloc[
+        : max(1, len(sorted_hours) // 2 + len(sorted_hours) % 2)
+    ]
+    reference_hours = float(top_half.median())
+
+    if reference_hours <= 0:
+        return {
+            p: {"fte_ratio": 1.0, "fte_label": "pełny", "is_part_time": False}
+            for p in hours_per_person.index
+        }
+
+    result: Dict[str, Dict[str, Any]] = {}
+    for person, hours in hours_per_person.items():
+        raw_ratio = hours / reference_hours
+
+        # Pełny etat — nie klasyfikujemy jako part-time
+        if raw_ratio >= 0.90:
+            result[person] = {
+                "fte_ratio": 1.0,
+                "fte_label": "pełny",
+                "is_part_time": False,
+            }
+            continue
+
+        # Znajdź najbliższy typowy ułamek
+        best_frac, best_label = min(_FTE_FRACTIONS, key=lambda f: abs(f[0] - raw_ratio))
+        result[person] = {
+            "fte_ratio": best_frac,
+            "fte_label": best_label,
+            "is_part_time": True,
+        }
+
+    return result
+
+
+# =============================================================================
 # EXECUTIVE SUMMARY (NOWA FUNKCJA)
 # =============================================================================
 
