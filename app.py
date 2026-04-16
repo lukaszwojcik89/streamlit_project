@@ -1808,428 +1808,434 @@ def render_personal_dashboard(df: pd.DataFrame):
 
     st.markdown("---")
 
-    # KALKULATOR KOSZTÓW
-    st.markdown("### 💰 Kalkulator kosztów pracy")
+    with st.expander("💰 Kalkulator kosztów pracy (opcjonalne)", expanded=False):
+        col_salary, col_hours = st.columns(2)
 
-    col_salary, col_hours = st.columns(2)
-
-    with col_salary:
-        brutto_salary = st.number_input(
-            "Wynagrodzenie brutto miesięczne (PLN)",
-            min_value=0.0,
-            value=10000.0,
-            step=500.0,
-            key=f"salary_{selected_person}",
-        )
-
-    with col_hours:
-        monthly_hours = st.number_input(
-            "Godzin roboczych miesięcznie",
-            min_value=1,
-            value=168,
-            step=1,
-            help="Standardowo: 168h (21 dni × 8h), opcjonalnie: 160h lub 176h",
-            key=f"hours_{selected_person}",
-        )
-
-    if brutto_salary > 0 and monthly_hours > 0:
-        hourly_rate = brutto_salary / monthly_hours
-        st.info(f"💵 **Koszt godzinowy:** {hourly_rate:.2f} PLN/h (brutto)")
-
-        # Oblicz koszty
-        # Jeśli wybrano konkretny miesiąc - koszt = pełne wynagrodzenie miesięczne
-        # Jeśli "Wszystkie" - koszt = godziny * stawka
-        if selected_month != "Wszystkie":
-            total_cost = brutto_salary
-            # Creative cost proporcjonalnie
-            creative_cost = (
-                (stats["creative_hours"] / stats["total_hours"] * brutto_salary)
-                if stats["total_hours"] > 0
-                else 0
+        with col_salary:
+            brutto_salary = st.number_input(
+                "Wynagrodzenie brutto miesięczne (PLN)",
+                min_value=0.0,
+                value=10000.0,
+                step=500.0,
+                key=f"salary_{selected_person}",
             )
-        else:
-            total_cost = stats["total_hours"] * hourly_rate
-            creative_cost = stats["creative_hours"] * hourly_rate
 
-        # Analiza najwartościowszych i najmniej wartościowych zadań
-        most_valuable_task = None
-        least_valuable_task = None
+        with col_hours:
+            monthly_hours = st.number_input(
+                "Godzin roboczych miesięcznie",
+                min_value=1,
+                value=168,
+                step=1,
+                help="Standardowo: 168h (21 dni × 8h), opcjonalnie: 160h lub 176h",
+                key=f"hours_{selected_person}",
+            )
 
-        if not df_filtered.empty and stats["total_hours"] > 0:
-            tasks_with_value = df_filtered.copy()
+        if brutto_salary > 0 and monthly_hours > 0:
+            hourly_rate = brutto_salary / monthly_hours
+            st.info(f"💵 **Koszt godzinowy:** {hourly_rate:.2f} PLN/h (brutto)")
 
-            # Oblicz koszt dla każdego zadania
+            # Oblicz koszty
+            # Jeśli wybrano konkretny miesiąc - koszt = pełne wynagrodzenie miesięczne
+            # Jeśli "Wszystkie" - koszt = godziny * stawka
             if selected_month != "Wszystkie":
-                tasks_with_value["task_cost"] = (
-                    tasks_with_value["time_hours"] / stats["total_hours"]
-                ) * brutto_salary
-            else:
-                tasks_with_value["task_cost"] = (
-                    tasks_with_value["time_hours"] * hourly_rate
+                total_cost = brutto_salary
+                # Creative cost proporcjonalnie
+                creative_cost = (
+                    (stats["creative_hours"] / stats["total_hours"] * brutto_salary)
+                    if stats["total_hours"] > 0
+                    else 0
                 )
-
-            # Oblicz creative score (wartość twórcza)
-            tasks_with_value["task_score"] = (
-                tasks_with_value["creative_hours"]
-                * tasks_with_value["creative_percent"]
-                / 100
-            )
-
-            # Filtruj zadania z danymi o twórczości (creative_percent > 0)
-            valuable_tasks = tasks_with_value[
-                (tasks_with_value["creative_percent"].notna())
-                & (tasks_with_value["creative_percent"] > 0)
-            ].copy()
-
-            # Jeśli brak zadań z twórczością, szukaj w zadaniach z czasem > 0
-            if valuable_tasks.empty:
-                valuable_tasks = tasks_with_value[
-                    tasks_with_value["time_hours"] > 0
-                ].copy()
-                use_score = False
             else:
-                use_score = True
+                total_cost = stats["total_hours"] * hourly_rate
+                creative_cost = stats["creative_hours"] * hourly_rate
 
-            if not valuable_tasks.empty:
-                # Zaawansowane metryki biznesowe
+            # Analiza najwartościowszych i najmniej wartościowych zadań
+            most_valuable_task = None
+            least_valuable_task = None
 
-                # Value Density = creative_score / cost (wartość twórcza per PLN)
-                valuable_tasks["value_density"] = valuable_tasks.apply(
-                    lambda row: (
-                        row["task_score"] / row["task_cost"]
-                        if row["task_cost"] > 0
-                        else 0
-                    ),
-                    axis=1,
-                )
+            if not df_filtered.empty and stats["total_hours"] > 0:
+                tasks_with_value = df_filtered.copy()
 
-                # Business Impact = creative_score × creative_percent/100 (całkowita wartość biznesowa)
-                valuable_tasks["business_impact"] = (
-                    valuable_tasks["task_score"]
-                    * valuable_tasks["creative_percent"]
+                # Oblicz koszt dla każdego zadania
+                if selected_month != "Wszystkie":
+                    tasks_with_value["task_cost"] = (
+                        tasks_with_value["time_hours"] / stats["total_hours"]
+                    ) * brutto_salary
+                else:
+                    tasks_with_value["task_cost"] = (
+                        tasks_with_value["time_hours"] * hourly_rate
+                    )
+
+                # Oblicz creative score (wartość twórcza)
+                tasks_with_value["task_score"] = (
+                    tasks_with_value["creative_hours"]
+                    * tasks_with_value["creative_percent"]
                     / 100
                 )
 
-                # Non-creative Cost = cost × (1 - creative_percent/100)
-                valuable_tasks["non_creative_cost"] = valuable_tasks["task_cost"] * (
-                    1 - valuable_tasks["creative_percent"] / 100
-                )
+                # Filtruj zadania z danymi o twórczości (creative_percent > 0)
+                valuable_tasks = tasks_with_value[
+                    (tasks_with_value["creative_percent"].notna())
+                    & (tasks_with_value["creative_percent"] > 0)
+                ].copy()
 
-                # Opportunity Loss = hours × (1 - creative_percent/100)
-                valuable_tasks["opportunity_loss"] = valuable_tasks["time_hours"] * (
-                    1 - valuable_tasks["creative_percent"] / 100
-                )
-
-                # Najwartościowsze = najwyższy Business Impact (największa wartość biznesowa)
-                most_valuable_idx = valuable_tasks["business_impact"].idxmax()
-                most_valuable_task = {
-                    "task": valuable_tasks.loc[most_valuable_idx, "task"],
-                    "key": valuable_tasks.loc[most_valuable_idx, "key"]
-                    if "key" in valuable_tasks.columns
-                    else "—",
-                    "hours": valuable_tasks.loc[most_valuable_idx, "time_hours"],
-                    "creative_percent": valuable_tasks.loc[
-                        most_valuable_idx, "creative_percent"
-                    ],
-                    "cost": valuable_tasks.loc[most_valuable_idx, "task_cost"],
-                    "score": valuable_tasks.loc[most_valuable_idx, "task_score"],
-                    "business_impact": valuable_tasks.loc[
-                        most_valuable_idx, "business_impact"
-                    ],
-                    "value_density": valuable_tasks.loc[
-                        most_valuable_idx, "value_density"
-                    ],
-                    "creative_cost": (
-                        valuable_tasks.loc[most_valuable_idx, "task_cost"]
-                        * valuable_tasks.loc[most_valuable_idx, "creative_percent"]
-                        / 100
-                    ),
-                }
-
-                # Najmniej wartościowe = najwyższy Non-creative Cost (największy drain budżetu na nietwórcze)
-                least_valuable_idx = valuable_tasks["non_creative_cost"].idxmax()
-
-                least_valuable_task = {
-                    "task": valuable_tasks.loc[least_valuable_idx, "task"],
-                    "key": valuable_tasks.loc[least_valuable_idx, "key"]
-                    if "key" in valuable_tasks.columns
-                    else "—",
-                    "hours": valuable_tasks.loc[least_valuable_idx, "time_hours"],
-                    "creative_percent": valuable_tasks.loc[
-                        least_valuable_idx, "creative_percent"
-                    ]
-                    if "creative_percent" in valuable_tasks.columns
-                    else 0,
-                    "cost": valuable_tasks.loc[least_valuable_idx, "task_cost"],
-                    "score": valuable_tasks.loc[least_valuable_idx, "task_score"]
-                    if use_score
-                    else 0,
-                    "non_creative_cost": valuable_tasks.loc[
-                        least_valuable_idx, "non_creative_cost"
-                    ],
-                    "opportunity_loss": valuable_tasks.loc[
-                        least_valuable_idx, "opportunity_loss"
-                    ],
-                    "creative_cost": (
-                        valuable_tasks.loc[least_valuable_idx, "task_cost"]
-                        * valuable_tasks.loc[least_valuable_idx, "creative_percent"]
-                        / 100
-                    ),
-                }
-
-        # Info o okresie
-        if selected_month == "Wszystkie":
-            st.caption(
-                f"⚠️ Wynagrodzenie ({brutto_salary:,.0f} PLN) to stawka **miesięczna**, "
-                f"ale statystyki poniżej dotyczą **całego okresu** ({stats['total_hours']:.1f}h z wielu miesięcy). "
-                f"Wybierz konkretny miesiąc z listy powyżej, żeby zobaczyć koszty miesięczne."
-            )
-        else:
-            st.caption(
-                f"✅ Koszt dla miesiąca **{selected_month}**: pełne wynagrodzenie miesięczne ({brutto_salary:,.0f} PLN). "
-                f"Przepracowano {stats['total_hours']:.1f}h z norm {monthly_hours}h, "
-                f"w tym {stats['creative_hours']:.1f}h twórczych."
-            )
-
-        col_cost1, col_cost2 = st.columns(2)
-
-        with col_cost1:
-            if selected_month == "Wszystkie":
-                help_text = (
-                    f"Obliczony dla {stats['total_hours']:.1f}h z wybranego okresu"
-                )
-            else:
-                help_text = f"Pełne wynagrodzenie miesięczne za {selected_month}"
-            st.metric(
-                label="💸 Koszt całkowity czasu pracy",
-                value=f"{total_cost:,.2f} PLN",
-                help=help_text,
-            )
-
-        with col_cost2:
-            if selected_month == "Wszystkie":
-                help_text = f"Koszt {stats['creative_hours']:.1f}h faktycznie twórczych"
-            else:
-                help_text = (
-                    f"{stats['creative_hours']:.1f}h twórczych / {stats['total_hours']:.1f}h łącznie = {stats['creative_hours'] / stats['total_hours'] * 100:.0f}% wynagrodzenia"
-                    if stats["total_hours"] > 0
-                    else "Brak godzin"
-                )
-            st.metric(
-                label="💎 Wartość pracy twórczej",
-                value=f"{creative_cost:,.2f} PLN",
-                help=help_text,
-            )
-
-        # Dodatkowe KPI kosztowe
-        extra_cost_col1, extra_cost_col2 = st.columns(2)
-        non_creative_cost_total = total_cost - creative_cost
-        cost_per_creative_hour = (
-            creative_cost / stats["creative_hours"]
-            if stats["creative_hours"] > 0
-            else 0
-        )
-        waste_ratio = (
-            non_creative_cost_total / total_cost * 100 if total_cost > 0 else 0
-        )
-
-        with extra_cost_col1:
-            st.metric(
-                label="💸 Koszt 1h twórczej",
-                value=f"{cost_per_creative_hour:,.2f} PLN/h",
-            )
-
-        with extra_cost_col2:
-            st.metric(label="🧯 Udział nietwórczy (koszt)", value=f"{waste_ratio:.0f}%")
-
-        st.markdown("---")
-
-        # Najbardziej i najmniej wartościowe zadanie
-        if most_valuable_task or least_valuable_task:
-            st.markdown("### 🎯 Zaawansowana analiza wartości zadań")
-
-            col_exp, col_cheap = st.columns(2)
-
-            with col_exp:
-                if most_valuable_task:
-                    st.markdown("#### 💎 Najwyższa wartość biznesowa")
-                    st.markdown(f"**{most_valuable_task['task']}**")
-
-                    # Extrahuj key z tytułu jeśli tam jest (format "XXX-123: ...")
-                    task_title = most_valuable_task["task"]
-                    if ":" in task_title:
-                        extracted_key = task_title.split(":")[0].strip()
-                    else:
-                        extracted_key = most_valuable_task["key"]
-                    st.caption(f"🔑 {extracted_key}")
-
-                    # Górny rząd metryk
-                    col_m1, col_m2 = st.columns(2)
-                    with col_m1:
-                        st.metric(
-                            label="Business Impact",
-                            value=f"{most_valuable_task['business_impact']:.2f}",
-                            help="creative_score × (creative_percent/100)",
-                        )
-                    with col_m2:
-                        st.metric(
-                            label="Value Density",
-                            value=f"{most_valuable_task['value_density']:.3f}",
-                            help="creative value per PLN spent",
-                        )
-
-                    # Środkowy rząd metryk
-                    col_m3, col_m4 = st.columns(2)
-                    with col_m3:
-                        st.metric(
-                            label="Creative Score",
-                            value=f"{most_valuable_task['score']:.2f}",
-                        )
-                    with col_m4:
-                        st.metric(
-                            label="Koszt twórczej pracy",
-                            value=f"{most_valuable_task['creative_cost']:,.0f} PLN",
-                        )
-
-                    st.caption(
-                        f"⏱️ Czas: {most_valuable_task['hours']:.1f}h | "
-                        f"🎨 Twórczość: {most_valuable_task['creative_percent']:.0f}% | "
-                        f"💸 Koszt całkowity: {most_valuable_task['cost']:,.0f} PLN"
-                    )
-
-            with col_cheap:
-                if least_valuable_task:
-                    st.markdown("#### ⚠️ Największy drain budżetu")
-                    st.markdown(f"**{least_valuable_task['task']}**")
-
-                    # Extrahuj key z tytułu jeśli tam jest
-                    task_title = least_valuable_task["task"]
-                    if ":" in task_title:
-                        extracted_key = task_title.split(":")[0].strip()
-                    else:
-                        extracted_key = least_valuable_task["key"]
-                    st.caption(f"🔑 {extracted_key}")
-
-                    # Górny rząd metryk
-                    col_m1, col_m2 = st.columns(2)
-                    with col_m1:
-                        st.metric(
-                            label="Koszt bez wartości",
-                            value=f"{least_valuable_task['non_creative_cost']:,.0f} PLN",
-                            help="cost × (1 - creative_percent/100)",
-                        )
-                    with col_m2:
-                        st.metric(
-                            label="Zmarnowane godziny",
-                            value=f"{least_valuable_task['opportunity_loss']:.1f}h",
-                            help="hours × (1 - creative_percent/100)",
-                        )
-
-                    # Środkowy rząd metryk
-                    col_m3, col_m4 = st.columns(2)
-                    with col_m3:
-                        if least_valuable_task["creative_cost"] > 0:
-                            st.metric(
-                                label="Koszt pracy twórczej",
-                                value=f"{least_valuable_task['creative_cost']:,.0f} PLN",
-                            )
-                        else:
-                            st.metric(label="Koszt pracy twórczej", value="0 PLN")
-                    with col_m4:
-                        st.metric(
-                            label="Split kosztów",
-                            value=f"{(1 - least_valuable_task['creative_percent'] / 100) * 100:.0f}% drain",
-                        )
-
-                    st.caption(
-                        f"⏱️ Czas: {least_valuable_task['hours']:.1f}h | "
-                        f"🎨 Twórczość: {least_valuable_task['creative_percent']:.0f}% | "
-                        f"💸 Koszt całkowity: {least_valuable_task['cost']:,.0f} PLN"
-                    )
-
-        st.markdown("---")
-
-        # Koszty per kategoria
-        if stats["categories_breakdown"]:
-            st.markdown("### 📋 Koszty per kategoria zadań")
-
-            categories_cost_data = []
-            for cat, data in stats["categories_breakdown"].items():
-                if selected_month != "Wszystkie":
-                    # Dla konkretnego miesiąca - proporcjonalnie do udziału godzin
-                    cat_cost = (
-                        (data["hours"] / stats["total_hours"] * brutto_salary)
-                        if stats["total_hours"] > 0
-                        else 0
-                    )
-                    creative_cat_cost = (
-                        (data["creative_hours"] / stats["total_hours"] * brutto_salary)
-                        if stats["total_hours"] > 0
-                        else 0
-                    )
+                # Jeśli brak zadań z twórczością, szukaj w zadaniach z czasem > 0
+                if valuable_tasks.empty:
+                    valuable_tasks = tasks_with_value[
+                        tasks_with_value["time_hours"] > 0
+                    ].copy()
+                    use_score = False
                 else:
-                    # Dla wszystkich miesięcy - godziny * stawka
-                    cat_cost = data["hours"] * hourly_rate
-                    creative_cat_cost = data["creative_hours"] * hourly_rate
+                    use_score = True
 
-                categories_cost_data.append(
-                    {
-                        "Kategoria": cat,
-                        "Liczba zadań": data["count"],
-                        "Godziny": data["hours"],
-                        "Koszt [PLN]": cat_cost,
-                        "Godz. twórcze": data["creative_hours"],
-                        "Wartość twórcza [PLN]": creative_cat_cost,
+                if not valuable_tasks.empty:
+                    # Zaawansowane metryki biznesowe
+
+                    # Value Density = creative_score / cost (wartość twórcza per PLN)
+                    valuable_tasks["value_density"] = valuable_tasks.apply(
+                        lambda row: (
+                            row["task_score"] / row["task_cost"]
+                            if row["task_cost"] > 0
+                            else 0
+                        ),
+                        axis=1,
+                    )
+
+                    # Business Impact = creative_score × creative_percent/100 (całkowita wartość biznesowa)
+                    valuable_tasks["business_impact"] = (
+                        valuable_tasks["task_score"]
+                        * valuable_tasks["creative_percent"]
+                        / 100
+                    )
+
+                    # Non-creative Cost = cost × (1 - creative_percent/100)
+                    valuable_tasks["non_creative_cost"] = valuable_tasks[
+                        "task_cost"
+                    ] * (1 - valuable_tasks["creative_percent"] / 100)
+
+                    # Opportunity Loss = hours × (1 - creative_percent/100)
+                    valuable_tasks["opportunity_loss"] = valuable_tasks[
+                        "time_hours"
+                    ] * (1 - valuable_tasks["creative_percent"] / 100)
+
+                    # Najwartościowsze = najwyższy Business Impact (największa wartość biznesowa)
+                    most_valuable_idx = valuable_tasks["business_impact"].idxmax()
+                    most_valuable_task = {
+                        "task": valuable_tasks.loc[most_valuable_idx, "task"],
+                        "key": valuable_tasks.loc[most_valuable_idx, "key"]
+                        if "key" in valuable_tasks.columns
+                        else "—",
+                        "hours": valuable_tasks.loc[most_valuable_idx, "time_hours"],
+                        "creative_percent": valuable_tasks.loc[
+                            most_valuable_idx, "creative_percent"
+                        ],
+                        "cost": valuable_tasks.loc[most_valuable_idx, "task_cost"],
+                        "score": valuable_tasks.loc[most_valuable_idx, "task_score"],
+                        "business_impact": valuable_tasks.loc[
+                            most_valuable_idx, "business_impact"
+                        ],
+                        "value_density": valuable_tasks.loc[
+                            most_valuable_idx, "value_density"
+                        ],
+                        "creative_cost": (
+                            valuable_tasks.loc[most_valuable_idx, "task_cost"]
+                            * valuable_tasks.loc[most_valuable_idx, "creative_percent"]
+                            / 100
+                        ),
                     }
+
+                    # Najmniej wartościowe = najwyższy Non-creative Cost (największy drain budżetu na nietwórcze)
+                    least_valuable_idx = valuable_tasks["non_creative_cost"].idxmax()
+
+                    least_valuable_task = {
+                        "task": valuable_tasks.loc[least_valuable_idx, "task"],
+                        "key": valuable_tasks.loc[least_valuable_idx, "key"]
+                        if "key" in valuable_tasks.columns
+                        else "—",
+                        "hours": valuable_tasks.loc[least_valuable_idx, "time_hours"],
+                        "creative_percent": valuable_tasks.loc[
+                            least_valuable_idx, "creative_percent"
+                        ]
+                        if "creative_percent" in valuable_tasks.columns
+                        else 0,
+                        "cost": valuable_tasks.loc[least_valuable_idx, "task_cost"],
+                        "score": valuable_tasks.loc[least_valuable_idx, "task_score"]
+                        if use_score
+                        else 0,
+                        "non_creative_cost": valuable_tasks.loc[
+                            least_valuable_idx, "non_creative_cost"
+                        ],
+                        "opportunity_loss": valuable_tasks.loc[
+                            least_valuable_idx, "opportunity_loss"
+                        ],
+                        "creative_cost": (
+                            valuable_tasks.loc[least_valuable_idx, "task_cost"]
+                            * valuable_tasks.loc[least_valuable_idx, "creative_percent"]
+                            / 100
+                        ),
+                    }
+
+            # Info o okresie
+            if selected_month == "Wszystkie":
+                st.caption(
+                    f"⚠️ Wynagrodzenie ({brutto_salary:,.0f} PLN) to stawka **miesięczna**, "
+                    f"ale statystyki poniżej dotyczą **całego okresu** ({stats['total_hours']:.1f}h z wielu miesięcy). "
+                    f"Wybierz konkretny miesiąc z listy powyżej, żeby zobaczyć koszty miesięczne."
+                )
+            else:
+                st.caption(
+                    f"✅ Koszt dla miesiąca **{selected_month}**: pełne wynagrodzenie miesięczne ({brutto_salary:,.0f} PLN). "
+                    f"Przepracowano {stats['total_hours']:.1f}h z norm {monthly_hours}h, "
+                    f"w tym {stats['creative_hours']:.1f}h twórczych."
                 )
 
-            if categories_cost_data:
-                cost_df = pd.DataFrame(categories_cost_data)
-                cost_df = cost_df.sort_values("Koszt [PLN]", ascending=False)
+            col_cost1, col_cost2 = st.columns(2)
 
-                # Formatuj
-                cost_df_display = cost_df.copy()
-                cost_df_display["Godziny"] = cost_df_display["Godziny"].apply(
-                    lambda x: f"{x:.1f}h"
-                )
-                cost_df_display["Koszt [PLN]"] = cost_df_display["Koszt [PLN]"].apply(
-                    lambda x: f"{x:,.2f}"
-                )
-                cost_df_display["Godz. twórcze"] = cost_df_display[
-                    "Godz. twórcze"
-                ].apply(lambda x: f"{x:.1f}h")
-                cost_df_display["Wartość twórcza [PLN]"] = cost_df_display[
-                    "Wartość twórcza [PLN]"
-                ].apply(lambda x: f"{x:,.2f}")
-
-                st.dataframe(cost_df_display, width="stretch", hide_index=True)
-
-                if selected_month != "Wszystkie":
-                    st.caption(
-                        f"✅ Koszty per kategoria obliczone proporcjonalnie do udziału godzin. "
-                        f"Suma kosztów wszystkich kategorii = {brutto_salary:,.0f} PLN (pełne wynagrodzenie miesięczne)."
+            with col_cost1:
+                if selected_month == "Wszystkie":
+                    help_text = (
+                        f"Obliczony dla {stats['total_hours']:.1f}h z wybranego okresu"
                     )
                 else:
-                    st.caption(
-                        "⚠️ Koszty obliczone jako (godziny × stawka godzinowa) dla całego okresu. "
-                        "Wybierz konkretny miesiąc powyżej, żeby zobaczyć podział wynagrodzenia miesięcznego."
+                    help_text = f"Pełne wynagrodzenie miesięczne za {selected_month}"
+                st.metric(
+                    label="💸 Koszt całkowity czasu pracy",
+                    value=f"{total_cost:,.2f} PLN",
+                    help=help_text,
+                )
+
+            with col_cost2:
+                if selected_month == "Wszystkie":
+                    help_text = (
+                        f"Koszt {stats['creative_hours']:.1f}h faktycznie twórczych"
+                    )
+                else:
+                    help_text = (
+                        f"{stats['creative_hours']:.1f}h twórczych / {stats['total_hours']:.1f}h łącznie = {stats['creative_hours'] / stats['total_hours'] * 100:.0f}% wynagrodzenia"
+                        if stats["total_hours"] > 0
+                        else "Brak godzin"
+                    )
+                st.metric(
+                    label="💎 Wartość pracy twórczej",
+                    value=f"{creative_cost:,.2f} PLN",
+                    help=help_text,
+                )
+
+            # Dodatkowe KPI kosztowe
+            extra_cost_col1, extra_cost_col2 = st.columns(2)
+            non_creative_cost_total = total_cost - creative_cost
+            cost_per_creative_hour = (
+                creative_cost / stats["creative_hours"]
+                if stats["creative_hours"] > 0
+                else 0
+            )
+            waste_ratio = (
+                non_creative_cost_total / total_cost * 100 if total_cost > 0 else 0
+            )
+
+            with extra_cost_col1:
+                st.metric(
+                    label="💸 Koszt 1h twórczej",
+                    value=f"{cost_per_creative_hour:,.2f} PLN/h",
+                )
+
+            with extra_cost_col2:
+                st.metric(
+                    label="🧯 Udział nietwórczy (koszt)", value=f"{waste_ratio:.0f}%"
+                )
+
+            st.markdown("---")
+
+            # Najbardziej i najmniej wartościowe zadanie
+            if most_valuable_task or least_valuable_task:
+                st.markdown("### 🎯 Zaawansowana analiza wartości zadań")
+
+                col_exp, col_cheap = st.columns(2)
+
+                with col_exp:
+                    if most_valuable_task:
+                        st.markdown("#### 💎 Najwyższa wartość biznesowa")
+                        st.markdown(f"**{most_valuable_task['task']}**")
+
+                        # Extrahuj key z tytułu jeśli tam jest (format "XXX-123: ...")
+                        task_title = most_valuable_task["task"]
+                        if ":" in task_title:
+                            extracted_key = task_title.split(":")[0].strip()
+                        else:
+                            extracted_key = most_valuable_task["key"]
+                        st.caption(f"🔑 {extracted_key}")
+
+                        # Górny rząd metryk
+                        col_m1, col_m2 = st.columns(2)
+                        with col_m1:
+                            st.metric(
+                                label="Business Impact",
+                                value=f"{most_valuable_task['business_impact']:.2f}",
+                                help="creative_score × (creative_percent/100)",
+                            )
+                        with col_m2:
+                            st.metric(
+                                label="Value Density",
+                                value=f"{most_valuable_task['value_density']:.3f}",
+                                help="creative value per PLN spent",
+                            )
+
+                        # Środkowy rząd metryk
+                        col_m3, col_m4 = st.columns(2)
+                        with col_m3:
+                            st.metric(
+                                label="Creative Score",
+                                value=f"{most_valuable_task['score']:.2f}",
+                            )
+                        with col_m4:
+                            st.metric(
+                                label="Koszt twórczej pracy",
+                                value=f"{most_valuable_task['creative_cost']:,.0f} PLN",
+                            )
+
+                        st.caption(
+                            f"⏱️ Czas: {most_valuable_task['hours']:.1f}h | "
+                            f"🎨 Twórczość: {most_valuable_task['creative_percent']:.0f}% | "
+                            f"💸 Koszt całkowity: {most_valuable_task['cost']:,.0f} PLN"
+                        )
+
+                with col_cheap:
+                    if least_valuable_task:
+                        st.markdown("#### ⚠️ Największy drain budżetu")
+                        st.markdown(f"**{least_valuable_task['task']}**")
+
+                        # Extrahuj key z tytułu jeśli tam jest
+                        task_title = least_valuable_task["task"]
+                        if ":" in task_title:
+                            extracted_key = task_title.split(":")[0].strip()
+                        else:
+                            extracted_key = least_valuable_task["key"]
+                        st.caption(f"🔑 {extracted_key}")
+
+                        # Górny rząd metryk
+                        col_m1, col_m2 = st.columns(2)
+                        with col_m1:
+                            st.metric(
+                                label="Koszt bez wartości",
+                                value=f"{least_valuable_task['non_creative_cost']:,.0f} PLN",
+                                help="cost × (1 - creative_percent/100)",
+                            )
+                        with col_m2:
+                            st.metric(
+                                label="Zmarnowane godziny",
+                                value=f"{least_valuable_task['opportunity_loss']:.1f}h",
+                                help="hours × (1 - creative_percent/100)",
+                            )
+
+                        # Środkowy rząd metryk
+                        col_m3, col_m4 = st.columns(2)
+                        with col_m3:
+                            if least_valuable_task["creative_cost"] > 0:
+                                st.metric(
+                                    label="Koszt pracy twórczej",
+                                    value=f"{least_valuable_task['creative_cost']:,.0f} PLN",
+                                )
+                            else:
+                                st.metric(label="Koszt pracy twórczej", value="0 PLN")
+                        with col_m4:
+                            st.metric(
+                                label="Split kosztów",
+                                value=f"{(1 - least_valuable_task['creative_percent'] / 100) * 100:.0f}% drain",
+                            )
+
+                        st.caption(
+                            f"⏱️ Czas: {least_valuable_task['hours']:.1f}h | "
+                            f"🎨 Twórczość: {least_valuable_task['creative_percent']:.0f}% | "
+                            f"💸 Koszt całkowity: {least_valuable_task['cost']:,.0f} PLN"
+                        )
+
+            st.markdown("---")
+
+            # Koszty per kategoria
+            if stats["categories_breakdown"]:
+                st.markdown("### 📋 Koszty per kategoria zadań")
+
+                categories_cost_data = []
+                for cat, data in stats["categories_breakdown"].items():
+                    if selected_month != "Wszystkie":
+                        # Dla konkretnego miesiąca - proporcjonalnie do udziału godzin
+                        cat_cost = (
+                            (data["hours"] / stats["total_hours"] * brutto_salary)
+                            if stats["total_hours"] > 0
+                            else 0
+                        )
+                        creative_cat_cost = (
+                            (
+                                data["creative_hours"]
+                                / stats["total_hours"]
+                                * brutto_salary
+                            )
+                            if stats["total_hours"] > 0
+                            else 0
+                        )
+                    else:
+                        # Dla wszystkich miesięcy - godziny * stawka
+                        cat_cost = data["hours"] * hourly_rate
+                        creative_cat_cost = data["creative_hours"] * hourly_rate
+
+                    categories_cost_data.append(
+                        {
+                            "Kategoria": cat,
+                            "Liczba zadań": data["count"],
+                            "Godziny": data["hours"],
+                            "Koszt [PLN]": cat_cost,
+                            "Godz. twórcze": data["creative_hours"],
+                            "Wartość twórcza [PLN]": creative_cat_cost,
+                        }
                     )
 
-                # Wykres kosztów
-                fig_cost = px.bar(
-                    cost_df,
-                    x="Koszt [PLN]",
-                    y="Kategoria",
-                    orientation="h",
-                    title="Koszt pracy per kategoria",
-                    labels={"Koszt [PLN]": "Koszt (PLN)", "Kategoria": ""},
-                    color="Koszt [PLN]",
-                    color_continuous_scale="Plasma",
-                )
-                fig_cost.update_layout(height=400)
-                st.plotly_chart(fig_cost, width="stretch")
+                if categories_cost_data:
+                    cost_df = pd.DataFrame(categories_cost_data)
+                    cost_df = cost_df.sort_values("Koszt [PLN]", ascending=False)
 
-    st.markdown("---")
+                    # Formatuj
+                    cost_df_display = cost_df.copy()
+                    cost_df_display["Godziny"] = cost_df_display["Godziny"].apply(
+                        lambda x: f"{x:.1f}h"
+                    )
+                    cost_df_display["Koszt [PLN]"] = cost_df_display[
+                        "Koszt [PLN]"
+                    ].apply(lambda x: f"{x:,.2f}")
+                    cost_df_display["Godz. twórcze"] = cost_df_display[
+                        "Godz. twórcze"
+                    ].apply(lambda x: f"{x:.1f}h")
+                    cost_df_display["Wartość twórcza [PLN]"] = cost_df_display[
+                        "Wartość twórcza [PLN]"
+                    ].apply(lambda x: f"{x:,.2f}")
+
+                    st.dataframe(cost_df_display, width="stretch", hide_index=True)
+
+                    if selected_month != "Wszystkie":
+                        st.caption(
+                            f"✅ Koszty per kategoria obliczone proporcjonalnie do udziału godzin. "
+                            f"Suma kosztów wszystkich kategorii = {brutto_salary:,.0f} PLN (pełne wynagrodzenie miesięczne)."
+                        )
+                    else:
+                        st.caption(
+                            "⚠️ Koszty obliczone jako (godziny × stawka godzinowa) dla całego okresu. "
+                            "Wybierz konkretny miesiąc powyżej, żeby zobaczyć podział wynagrodzenia miesięcznego."
+                        )
+
+                    # Wykres kosztów
+                    fig_cost = px.bar(
+                        cost_df,
+                        x="Koszt [PLN]",
+                        y="Kategoria",
+                        orientation="h",
+                        title="Koszt pracy per kategoria",
+                        labels={"Koszt [PLN]": "Koszt (PLN)", "Kategoria": ""},
+                        color="Koszt [PLN]",
+                        color_continuous_scale="Plasma",
+                    )
+                    fig_cost.update_layout(height=400)
+                    st.plotly_chart(fig_cost, width="stretch")
+
+        st.markdown("---")
 
     # TOP ZADANIA
     if stats["top_tasks_df"] is not None and not stats["top_tasks_df"].empty:
