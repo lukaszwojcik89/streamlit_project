@@ -212,6 +212,289 @@ def aggregate_worklogs_to_report(df_worklogs: pd.DataFrame) -> pd.DataFrame:
 
 
 # =============================================================================
+# AI SUMMARY (OpenRouter)
+# =============================================================================
+
+OPENROUTER_MODEL = "deepseek/deepseek-v3.2"
+OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+
+def _anonymize_df(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, str]]:
+    """Zastępuje imiona 'Osoba A', 'Osoba B', ... Zwraca (df_anon, mapping)."""
+    people = sorted(df["person"].unique().tolist())
+    mapping = {person: f"Osoba {chr(65 + i)}" for i, person in enumerate(people)}
+    df_anon = df.copy()
+    df_anon["person"] = df_anon["person"].map(mapping)
+    return df_anon, mapping
+
+
+def _deanonymize(text: str, mapping: dict[str, str]) -> str:
+    """Podmienia anonimowe nazwy z powrotem na prawdziwe imiona.
+
+    Obsługuje odmienione formy: 'Osoba X', 'Osoby X', 'Osobie X', 'Osobę X', 'Osobą X'.
+    """
+    import re
+
+    for real, anon in mapping.items():
+        letter = anon.split()[-1]  # np. "E" z "Osoba E"
+        text = re.sub(
+            rf"\bOsob[aąeyię]+\s+{re.escape(letter)}\b",
+            real,
+            text,
+        )
+    return text
+
+
+def _data_hash(df: pd.DataFrame, month: str) -> str:
+    """Fingerprint danych — zmiana hasha = nowe wywołanie AI."""
+    import hashlib
+
+    key = (
+        f"{month}|{sorted(df['person'].unique().tolist())}|{df['time_hours'].sum():.1f}"
+    )
+    return hashlib.md5(key.encode()).hexdigest()[:10]
+
+
+def _build_context_block(df_anon: pd.DataFrame, selected_month: str) -> str:
+    """Buduje bogaty blok kontekstowy: dane per osoba + analiza kategorii zadań."""
+    period = (
+        f"Miesiąc: {selected_month}"
+        if selected_month != "Wszystkie"
+        else "Okres: wszystkie miesiące"
+    )
+
+    # Per-person summary
+    person_lines = []
+    for person, grp in df_anon.groupby("person"):
+        total_h = grp["time_hours"].sum()
+        creative_h = grp["creative_hours"].sum()
+        avg_pct = grp["creative_percent"].mean()
+        score = (grp["creative_hours"] * grp["creative_percent"].fillna(0) / 100).sum()
+        person_lines.append(
+            f"  - {person}: {total_h:.1f}h łącznie, {creative_h:.1f}h twórczych, "
+            f"śr. {avg_pct:.0f}% kreatywności, Score: {score:.1f}"
+        )
+
+    # Category analysis via generate_executive_summary (uses same keyword logic)
+    exec_summary = generate_executive_summary(df_anon)
+    category_lines = []
+    all_insights = (
+        exec_summary.get("insights_top3_cats", [])
+        + exec_summary.get("insights", [])
+        + exec_summary.get("insights_team", [])
+    )
+    for insight in all_insights:
+        # Strip emoji prefix and format as plain context
+        clean = insight.strip()
+        if clean:
+            category_lines.append(f"  - {clean}")
+
+    person_block = "\n".join(person_lines)
+    category_block = (
+        "\n".join(category_lines)
+        if category_lines
+        else "  (brak danych kategorycznych)"
+    )
+
+    return (
+        f"{period}\n\n"
+        f"Dane per osoba (zanonimizowane):\n{person_block}\n\n"
+        f"Analiza automatyczna (kontekst dla AI):\n{category_block}"
+    )
+
+
+def call_openrouter(
+    df: pd.DataFrame, selected_month: str, mode: str = "summary"
+) -> tuple[str, dict[str, str]]:
+    """Wysyła zanonimizowane dane do OpenRouter i zwraca (odpowiedź, mapping).
+
+    mode: "summary" — pełne podsumowanie menedżerskie
+          "observations" — lista konkretnych obserwacji z wnioskami biznesowymi
+    """
+    import requests
+
+    api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+    if not api_key:
+        raise ValueError("Brak klucza OPENROUTER_API_KEY w pliku .env")
+
+    df_anon, mapping = _anonymize_df(df)
+    context = _build_context_block(df_anon, selected_month)
+
+    if mode == "full":
+        prompt = (
+            "Jesteś ekspertem analizy pracy twórczej i menedżerskim doradcą. "
+            "Na podstawie poniższych danych zespołu przygotuj analizę po polsku w dwóch częściach.\n\n"
+            f"{context}\n\n"
+            "CZĘŚĆ 1 — OBSERWACJE (6–8 punktów):\n"
+            "- Każda obserwacja musi zawierać LICZBY z danych ORAZ interpretację biznesową\n"
+            "- Wskazuj wzorce, ryzyka, dysproporcje, zaskakujące korelacje\n"
+            "- Nie powtarzaj suchych danych — dodaj wniosek 'co to oznacza dla zespołu'\n"
+            "- Używaj emoji na początku: ✅ dobry trend, ⚠️ uwaga, ⛔ ryzyko, 📉 regres, 🏆 wyróżnienie\n"
+            "Format każdej obserwacji: 'emoji **Temat:** treść z liczbami i wnioskiem'\n\n"
+            "Po obserwacjach wpisz dokładnie ten separator (nic więcej w tej linii):\n"
+            "===REKOMENDACJE===\n\n"
+            "CZĘŚĆ 2 — REKOMENDACJE (3–5 konkretnych punktów dla managera):\n"
+            "- Każda rekomendacja musi być konkretna i powiązana z danymi\n"
+            "- Format: '**N. Tytuł:** opis działania'\n"
+            "- Nie powtarzaj obserwacji — skup się na tym CO ZROBIĆ\n"
+            "NIE dodawaj żadnych innych nagłówków ani podsumowań."
+        )
+    elif mode == "observations":
+        prompt = (
+            "Jesteś ekspertem analizy pracy twórczej i menedżerskim doradcą. "
+            "Na podstawie poniższych danych zespołu napisz 6–8 wnikliwych obserwacji menedżerskich po polsku.\n\n"
+            f"{context}\n\n"
+            "Wymagania dla obserwacji:\n"
+            "- Każda obserwacja musi zawierać LICZBY z danych ORAZ interpretację biznesową\n"
+            "- Wskazuj wzorce, ryzyka, dysproporcje, zaskakujące korelacje\n"
+            "- Nie powtarzaj suchych danych — dodaj wniosek 'co to oznacza dla zespołu'\n"
+            "- Używaj emoji na początku: ✅ dobry trend, ⚠️ uwaga, ⛔ ryzyko, 📉 regres, 🏆 wyróżnienie\n"
+            "Format każdej obserwacji: 'emoji **Temat:** treść z liczbami i wnioskiem'\n"
+            "NIE dodawaj nagłówków ani podsumowania — tylko lista obserwacji."
+        )
+    else:
+        prompt = (
+            "Jesteś analitykiem pracy twórczej. Przygotuj zwięzłe podsumowanie menedżerskie po polsku.\n\n"
+            f"{context}\n\n"
+            "Podsumowanie powinno zawierać:\n"
+            "1. Ogólna ocena zespołu (2–3 zdania, liczby)\n"
+            "2. Osoby wyróżniające się pozytywnie i negatywnie\n"
+            "3. Rekomendacje dla managera (3–5 konkretnych punktów)\n"
+            "4. Obszary ryzyka lub do poprawy\n\n"
+            "Operuj liczbami z danych. Format: markdown. Bądź zwięzły."
+        )
+
+    resp = requests.post(
+        OPENROUTER_API_URL,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": OPENROUTER_MODEL,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 2000 if mode == "full" else 1400,
+        },
+        timeout=60,
+    )
+    resp.raise_for_status()
+    ai_text = resp.json()["choices"][0]["message"]["content"]
+    return _deanonymize(ai_text, mapping), mapping
+
+
+def _compute_team_health(df: pd.DataFrame) -> dict:
+    """Oblicza syntetyczny wskaźnik zdrowia zespołu (0–100)."""
+    coverage = df["creative_percent"].notna().mean() * 100
+    avg_creative = (
+        df.loc[df["creative_percent"].notna(), "creative_percent"].mean() or 0
+    )
+    scores = df.groupby("person")["creative_hours"].apply(
+        lambda h: (h * df.loc[h.index, "creative_percent"].fillna(0) / 100).sum()
+    )
+    consistency = max(0, 100 - scores.std() * 2) if len(scores) > 1 else 100
+
+    health = 0.35 * coverage + 0.45 * avg_creative + 0.20 * consistency
+    health = min(100, max(0, health))
+
+    if health >= 70:
+        label, color = "Dobry", "#2ecc71"
+    elif health >= 45:
+        label, color = "Średni", "#f39c12"
+    else:
+        label, color = "Wymaga uwagi", "#e74c3c"
+
+    return {
+        "score": health,
+        "label": label,
+        "color": color,
+        "coverage": coverage,
+        "avg_creative": avg_creative,
+    }
+
+
+def render_team_health(df: pd.DataFrame):
+    """Wyświetla kafelkę z syntetycznym wskaźnikiem zdrowia twórczego zespołu."""
+    h = _compute_team_health(df)
+    score = h["score"]
+    filled = int(round(score / 10))
+    bar = "█" * filled + "░" * (10 - filled)
+
+    st.markdown(
+        f"""
+<div style="background:#1e1e2e;border-radius:10px;padding:16px 20px;margin-bottom:8px">
+  <span style="font-size:13px;color:#aaa;text-transform:uppercase;letter-spacing:1px">Creative Health Score</span><br>
+  <span style="font-size:42px;font-weight:700;color:{h["color"]}">{score:.0f}</span>
+  <span style="font-size:16px;color:#aaa">/100 &nbsp;·&nbsp; {h["label"]}</span><br>
+  <span style="font-family:monospace;font-size:18px;color:{h["color"]};letter-spacing:2px">{bar}</span><br>
+  <span style="font-size:12px;color:#888">pokrycie {h["coverage"]:.0f}% · śr. twórczość {h["avg_creative"]:.0f}%</span>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def render_anomaly_alerts(df: pd.DataFrame):
+    """Automatycznie wykrywa i wyświetla alerty o anomaliach w danych."""
+    alerts = []
+
+    # 1. Osoby z niskim pokryciem danych
+    per_person = df.groupby("person")
+    for person, grp in per_person:
+        coverage = grp["creative_percent"].notna().mean() * 100
+        if coverage < 30:
+            alerts.append(
+                (
+                    "warning",
+                    f"**{person}** ma tylko {coverage:.0f}% zadań z uzupełnionym % twórczości",
+                )
+            )
+
+    # 2. Outlierzy Creative Score
+    scores = df.groupby("person")["creative_hours"].apply(
+        lambda h: (h * df.loc[h.index, "creative_percent"].fillna(0) / 100).sum()
+    )
+    if len(scores) >= 3:
+        mean_s, std_s = scores.mean(), scores.std()
+        for person, score in scores.items():
+            if score > mean_s + 2 * std_s:
+                alerts.append(
+                    (
+                        "info",
+                        f"**{person}** wyróżnia się Creative Score {score:.1f} (śr. zespołu: {mean_s:.1f})",
+                    )
+                )
+            elif score < mean_s - 1.5 * std_s and score < 15:
+                alerts.append(
+                    (
+                        "warning",
+                        f"**{person}** ma bardzo niski Creative Score: {score:.1f} (śr. {mean_s:.1f})",
+                    )
+                )
+
+    # 3. Ogólnie niskie średnie twórczości
+    avg_pct = df.loc[df["creative_percent"].notna(), "creative_percent"].mean()
+    if avg_pct < 40:
+        alerts.append(
+            (
+                "error",
+                f"Średni poziom pracy twórczej w zespole wynosi tylko **{avg_pct:.0f}%**",
+            )
+        )
+
+    if not alerts:
+        return
+
+    with st.expander(f"⚠️ Alerty ({len(alerts)})", expanded=True):
+        for kind, msg in alerts:
+            if kind == "error":
+                st.error(msg)
+            elif kind == "warning":
+                st.warning(msg)
+            else:
+                st.info(msg)
+
+
+# =============================================================================
 # KOMPONENTY UI
 # =============================================================================
 
