@@ -1027,7 +1027,22 @@ def render_detailed_data(df: pd.DataFrame):
         ]
 
     # Tabela
-    st.markdown("**📋 Tabela danych**")
+    COLUMN_OPTIONS = {
+        "👤 Osoba": "person",
+        "📋 Zadanie": "task",
+        "🔑 Klucz": "key",
+        "⏰ Czas": "time_display",
+        "🎨 %": "creative_percent_display",
+        "✨ Godz. twórcze": "creative_hours_display",
+    }
+    selected_cols = st.multiselect(
+        "Kolumny:",
+        options=list(COLUMN_OPTIONS.keys()),
+        default=list(COLUMN_OPTIONS.keys()),
+        key="detail_columns",
+    )
+    if not selected_cols:
+        selected_cols = list(COLUMN_OPTIONS.keys())
 
     display_df = df_filtered.copy()
     display_df["time_hours"] = display_df["time_hours"].astype(float)
@@ -1035,7 +1050,6 @@ def render_detailed_data(df: pd.DataFrame):
     display_df["creative_percent"] = pd.to_numeric(
         display_df["creative_percent"], errors="coerce"
     )
-
     display_df["creative_percent_display"] = display_df["creative_percent"].apply(
         lambda x: f"{int(x)}%" if pd.notna(x) else "Brak danych"
     )
@@ -1044,29 +1058,21 @@ def render_detailed_data(df: pd.DataFrame):
     )
     display_df["time_display"] = display_df["time_hours"].apply(lambda x: f"{x:.1f}h")
 
-    columns_to_show = [
-        "person",
-        "task",
-        "key",
-        "time_display",
-        "creative_percent_display",
-        "creative_hours_display",
-    ]
+    columns_to_show = [COLUMN_OPTIONS[c] for c in selected_cols]
+    col_config = {
+        "person": st.column_config.TextColumn("👤 Osoba", width="medium"),
+        "task": st.column_config.TextColumn("📋 Zadanie", width="large"),
+        "key": st.column_config.TextColumn("🔑 Klucz", width="small"),
+        "time_display": st.column_config.TextColumn("⏰ Czas", width="small"),
+        "creative_percent_display": st.column_config.TextColumn("🎨 %", width="small"),
+        "creative_hours_display": st.column_config.TextColumn(
+            "✨ Godz. twórcze", width="small"
+        ),
+    }
 
     st.dataframe(
         display_df[columns_to_show],
-        column_config={
-            "person": st.column_config.TextColumn("👤 Osoba", width="medium"),
-            "task": st.column_config.TextColumn("📋 Zadanie", width="large"),
-            "key": st.column_config.TextColumn("🔑 Klucz", width="small"),
-            "time_display": st.column_config.TextColumn("⏰ Czas", width="small"),
-            "creative_percent_display": st.column_config.TextColumn(
-                "🎨 %", width="small"
-            ),
-            "creative_hours_display": st.column_config.TextColumn(
-                "✨ Godz. twórcze", width="small"
-            ),
-        },
+        column_config={k: v for k, v in col_config.items() if k in columns_to_show},
         width="stretch",
         hide_index=True,
     )
