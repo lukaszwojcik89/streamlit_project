@@ -19,7 +19,7 @@ numpy==2.4.4
 openpyxl==3.1.5
 packaging==26.0
 pandas==3.0.2
-pillow==12.1.1
+pillow==12.2.0
 plotly==6.7.0
 protobuf==6.33.5
 pyarrow==23.0.1
@@ -28,7 +28,7 @@ python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
 pytz==2025.2
 referencing==0.37.0
-requests==2.32.5
+requests==2.33.0
 rpds-py==0.30.0
 ruff==0.15.10
 six==1.17.0
@@ -36,7 +36,7 @@ smmap==5.0.2
 streamlit==1.56.0
 tenacity==9.1.4
 toml==0.10.2
-tornado==6.5.4
+tornado==6.5.5
 typing_extensions==4.15.0
 tzdata==2025.3
 urllib3==2.6.3
