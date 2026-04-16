@@ -2315,12 +2315,11 @@ def main():
     st.title("📊 Raport Czasu Pracy i Pracy Twórczej")
 
     # Sidebar
-    worklogs_file, uploaded_file = render_sidebar()
+    worklogs_file, uploaded_file, excluded_people, selected_month = render_sidebar()
 
     if worklogs_file is None:
         st.info("👈 Wgraj plik Worklogs w panelu bocznym aby rozpocząć analizę.")
         render_help_tab()
-        return
         return
 
     try:
@@ -2348,14 +2347,17 @@ def main():
             st.error("❌ Nie udało się zagregować danych.")
             return
 
+        st.session_state["all_people"] = sorted(
+            df_processed_full["person"].unique().tolist()
+        )
+
         st.success(
             f"✅ Załadowano {len(df_worklogs)} wpisów worklogs ({len(df_processed_full)} unikatowych zadań)"
         )
 
         # Filtruj wykluczone osoby TYLKO DLA DASHBOARDU (nie dla metryk)
-        EXCLUDED_PEOPLE = ["Justyna Kalota", "Piotr Janeczek"]
         df_processed = df_processed_full[
-            ~df_processed_full["person"].isin(EXCLUDED_PEOPLE)
+            ~df_processed_full["person"].isin(excluded_people)
         ]
 
         # ===================================================================
@@ -2399,9 +2401,14 @@ def main():
                 month: group.copy() for month, group in df_worklogs.groupby("month_str")
             }
             months_available = sorted(df_worklogs_by_month.keys(), reverse=True)
+            st.session_state["months_available"] = months_available
 
-        # METRYKI (zawsze widoczne) - WSZYSTKIE OSOBY
-        render_metrics(df_processed_full)
+        # Filtr miesiąca z sidebar (zastosowany na df_processed)
+        if selected_month != "Wszystkie" and "month_str" in df_processed.columns:
+            df_processed = df_processed[df_processed["month_str"] == selected_month]
+
+        # METRYKI (zawsze widoczne) - WSZYSTKIE OSOBY (bez filtra miesiąca)
+        render_metrics(df_processed_full, selected_month)
         st.markdown("---")
 
         # TABS - porządek: Dashboard → Worklogs (jeśli dostępne) → Personal Dashboard → Pomoc
@@ -2445,7 +2452,7 @@ def main():
             with tab_objects[1]:
                 # Filtruj wykluczone osoby z worklogs per miesiąc
                 df_worklogs_by_month_filtered = {
-                    month: df[~df["person"].isin(EXCLUDED_PEOPLE)].copy()
+                    month: df[~df["person"].isin(excluded_people)].copy()
                     for month, df in df_worklogs_by_month.items()
                 }
                 render_worklogs_section(df_worklogs_by_month_filtered, months_available)
@@ -2459,7 +2466,7 @@ def main():
             df_for_personal = df_processed_full.copy()
             # Filtruj wykluczone osoby
             df_for_personal = df_for_personal[
-                ~df_for_personal["person"].isin(EXCLUDED_PEOPLE)
+                ~df_for_personal["person"].isin(excluded_people)
             ].copy()
 
             # Debug info
