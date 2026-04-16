@@ -48,7 +48,7 @@ df_processed = df_work[
 ]
 
 print(f"\nProcessed worklogs: {df_processed.shape}")
-print(f"Pierwsze 3 wiersze:")
+print("Pierwsze 3 wiersze:")
 print(df_processed.head(3))
 
 # Agreguj
@@ -69,14 +69,14 @@ df_final = df_agg[
 ]
 
 print(f"\nAgregated: {df_final.shape}")
-print(f"Pierwsze 5 wierszy:")
+print("Pierwsze 5 wierszy:")
 print(df_final.head(5))
 
-print(f"\nLaczna walidacja:")
+print("\nLaczna walidacja:")
 print(f"  Time in raw: {df_processed['time_hours'].sum():.1f}h")
 print(f"  Time in agg: {df_final['time_hours'].sum():.1f}h")
 print(
     f"  Match: {abs(df_processed['time_hours'].sum() - df_final['time_hours'].sum()) < 0.1}"
 )
 
-print(f"\n✅ Agregacja OK")
+print("\n✅ Agregacja OK")
