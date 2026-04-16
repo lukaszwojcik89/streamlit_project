@@ -510,13 +510,22 @@ def render_sidebar():
 
         st.markdown("---")
 
-        st.subheader("� Worklogs (główne źródło)")
+        st.subheader("📋 Worklogs (główne źródło)")
         worklogs_file = st.file_uploader(
             "Wgraj Worklogs (.xlsx)",
             type=["xlsx"],
             key="worklogs_file",
             help="Worklogs: Start Date, Issue Key, Time Spent, Procent pracy twórczej, Author",
         )
+        with st.expander("Wymagane kolumny"):
+            st.markdown(
+                "- `Author` — imię i nazwisko\n"
+                "- `Issue Key` — klucz zadania (np. PROJ-123)\n"
+                "- `Issue Summary` — tytuł zadania\n"
+                "- `Start Date` — data wpisu\n"
+                "- `Time Spent` — czas (np. 2h 30m)\n"
+                "- `Procent pracy twórczej` — liczba 0–100"
+            )
 
         st.markdown("---")
 
@@ -540,28 +549,49 @@ def render_sidebar():
                 st.warning(f"⚠️ Duży plik: {file_size_mb:.1f}MB")
 
         st.markdown("---")
+
+        # Filtr miesiąca
+        months_in_state = st.session_state.get("months_available", [])
+        month_options = ["Wszystkie"] + months_in_state
+        # Domyślnie wybierz najnowszy miesiąc (index 1), jeśli dostępny
+        default_month_index = 1 if len(months_in_state) > 0 else 0
+        selected_month = st.selectbox(
+            "📅 Filtruj miesiąc",
+            options=month_options,
+            index=default_month_index,
+            help="Filtruje Dashboard i Personal Dashboard do wybranego miesiąca.",
+        )
+
+        # Wyklucz osoby — hardcoded defaults zawsze w opcjach, nawet jeśli nie ma ich w danych
+        _default_excluded = ["Justyna Kalota", "Piotr Janeczek"]
+        _all_people = st.session_state.get("all_people", [])
+        _options = sorted(set(_all_people) | set(_default_excluded))
+        excluded_people = st.multiselect(
+            "🚫 Wyklucz osoby z dashboardu",
+            options=_options,
+            default=_default_excluded,
+            help="Osoby wykluczone nie pojawiają się w rankingach ani Personal Dashboard (nadal widoczne w metrykach głównych).",
+        )
+
+        st.markdown("---")
         st.header("ℹ️ Informacje")
         st.markdown(
             """
-        **Worklogs zawiera:**
-        - Issue Key i Summary
-        - Author (osoba)
-        - Time Spent (czas pracy)
-        - Start Date (data)
-        - Procent pracy twórczej
-        - Issue Type (Story, Bug, Task)
-        - Issue Status (Gotowe, W toku)
-        - Components (moduł)
-
         **Creative Score:**
         `godz_twórcze × (% / 100)`
+
+        | Wynik | Interpretacja |
+        |-------|---------------|
+        | < 15  | Niski         |
+        | 15–50 | Średni        |
+        | > 50  | Wysoki        |
         """
         )
 
-    return worklogs_file, uploaded_file
+    return worklogs_file, uploaded_file, excluded_people, selected_month
 
 
-def render_metrics(df: pd.DataFrame):
+def render_metrics(df: pd.DataFrame, selected_month: str = "Wszystkie"):
     """Renderuje główne metryki na górze strony."""
     col1, col2, col3, col4 = st.columns(4)
 
