@@ -24,6 +24,7 @@ from helpers import (
     generate_executive_summary,
     generate_personal_stats,
     generate_personalized_insight,
+    estimate_fte,
 )
 from export_utils import (
     export_to_csv,
@@ -651,38 +652,129 @@ def render_executive_summary(
 
     st.markdown("## 📋 Executive Summary")
 
-    col1, col2, col3, col4 = st.columns(4)
+    num_people = df["person"].nunique()
+    avg_creative_hours_per_person = (
+        summary["total_creative_hours"] / num_people if num_people > 0 else 0
+    )
+    avg_total_hours_per_person = (
+        summary["total_hours"] / num_people if num_people > 0 else 0
+    )
 
-    with col1:
-        if summary["top_performer"]:
-            st.metric(
-                "🏆 Top Performer (Creative Score)",
-                summary["top_performer"],
-                delta=f"Score: {summary['top_performer_score']:.1f}",
-            )
-        else:
-            st.metric("🏆 Top Performer", "—")
+    # Normalizacja score po etacie (w tle — wpływa na top/bottom performer)
+    _person_hours = df.groupby("person")["time_hours"].sum()
+    _fte_map = estimate_fte(_person_hours)
+    _part_timers = [p for p, v in _fte_map.items() if v["is_part_time"]]
 
-    with col2:
+    # Policz znormalizowane score per osoba
+    _df_s = df[df["creative_percent"].notna()].copy()
+    _df_s["_ts"] = _df_s["creative_hours"] * _df_s["creative_percent"] / 100
+    _raw_scores = _df_s.groupby("person")["_ts"].sum()
+    _norm_scores = pd.Series(
+        {
+            p: s / _fte_map.get(p, {"fte_ratio": 1.0})["fte_ratio"]
+            for p, s in _raw_scores.items()
+        }
+    ).sort_values(ascending=False)
+
+    # Top / bottom performer na podstawie znormalizowanych score
+    top_performer_norm = _norm_scores.index[0] if not _norm_scores.empty else None
+    top_performer_score_norm = _norm_scores.iloc[0] if not _norm_scores.empty else 0.0
+    bottom_performer_norm = _norm_scores.index[-1] if len(_norm_scores) > 1 else None
+    bottom_performer_score_norm = (
+        _norm_scores.iloc[-1] if len(_norm_scores) > 1 else None
+    )
+
+    # --- Sekcja 1: Zespół ---
+    st.markdown("#### 👥 Zespół")
+    t1, t2, t3, t4 = st.columns(4)
+
+    with t1:
+        st.metric("👤 Liczba osób", num_people)
+
+    with t2:
         st.metric(
-            "📊 Pokrycie danymi",
-            f"{summary['data_coverage']:.0f}%",
-            delta=f"{summary['total_creative_hours']:.1f}h twórczych",
+            "⏰ Śr. godziny / osoba",
+            f"{avg_total_hours_per_person:.1f}h",
         )
 
-    with col3:
+    with t3:
+        st.metric(
+            "✨ Śr. godz. twórcze / osoba",
+            f"{avg_creative_hours_per_person:.1f}h",
+        )
+
+    with t4:
         if summary["avg_creative_percent"]:
             st.metric(
-                "🎨 Średni % (ważony godzinami)",
+                "🎨 Śr. % twórczości",
                 f"{summary['avg_creative_percent']:.0f}%",
+                delta=f"pokrycie: {summary['data_coverage']:.0f}%",
             )
         else:
-            st.metric("🎨 Średni % (ważony godzinami)", "—")
+            st.metric("🎨 Śr. % twórczości", "—")
 
-    st.caption(
-        "💡 **Wyjaśnienie % twórczości:** Metryka na górze jest ważona godzinami (osoby pracujące mniej nie zaniżają wyniku), "
-        "tabela Produktywności pokazuje proste średnie per osoba. Różnice są normalne!"
-    )
+    st.markdown("#### 🏆 Wyróżnienia indywidualne")
+
+    # Najwyższy % twórczości
+    prod = summary.get("productivity_table")
+    best_creative_pct_person = None
+    best_creative_pct_val = None
+    most_hours_row = None
+    if prod is not None and not prod.empty:
+        valid_pct = prod[prod["% Pracy twórczej"].notna()]
+        if not valid_pct.empty:
+            best_idx = valid_pct["% Pracy twórczej"].idxmax()
+            best_creative_pct_person = valid_pct.loc[best_idx, "Osoba"]
+            best_creative_pct_val = valid_pct.loc[best_idx, "% Pracy twórczej"]
+        most_hours_row = prod.loc[prod["Łącznie [h]"].idxmax()]
+
+    i1, i2, i3, i4 = st.columns(4)
+
+    with i1:
+        if top_performer_norm:
+            st.metric(
+                "🥇 Najwyższy Creative Score",
+                top_performer_norm,
+                delta=f"Score: {top_performer_score_norm:.1f}",
+            )
+        else:
+            st.metric("🥇 Najwyższy Creative Score", "—")
+
+    with i2:
+        if bottom_performer_norm:
+            st.metric(
+                "📉 Najniższy Creative Score",
+                bottom_performer_norm,
+                delta=f"Score: {bottom_performer_score_norm:.1f}",
+                delta_color="inverse",
+            )
+        else:
+            st.metric("📉 Najniższy Creative Score", "—")
+
+    with i3:
+        if best_creative_pct_person:
+            st.metric(
+                "🎨 Najwyższy % twórczości",
+                best_creative_pct_person,
+                delta=f"{best_creative_pct_val:.0f}%",
+            )
+        else:
+            st.metric("🎨 Najwyższy % twórczości", "—")
+
+    with i4:
+        if most_hours_row is not None:
+            st.metric(
+                "⏱️ Najwięcej godzin",
+                most_hours_row["Osoba"],
+                delta=f"{most_hours_row['Łącznie [h]']:.1f}h",
+            )
+        else:
+            st.metric("⏱️ Najwięcej godzin", "—")
+
+    _caption = "💡 **Śr. % twórczości** jest ważony godzinami."
+    if _part_timers:
+        _caption += f" Score znormalizowany proporcjonalnie do wymiaru etatu ({', '.join(_part_timers)})."
+    st.caption(_caption)
 
     # Dynamiczne insighty — struktura: top 3 kategorie + 2 najbardziej znaczące + 1-2 teamowe
     top3 = summary.get("insights_top3_cats", [])
@@ -892,11 +984,6 @@ def render_executive_summary(
 def render_top_tasks_table(df: pd.DataFrame):
     """Renderuje tabelę i wykres Top Zadań per osoba."""
     st.markdown("## 🎯 Ranking Creative Score")
-    st.caption(
-        "**Ranking osób według Total Score** (suma score'ów ze wszystkich zadań osoby) — "
-        "spójny z Top Performer i Produktywnością zespołu. "
-        "Tabela pokazuje najlepsze pojedyncze zadanie każdej osoby."
-    )
 
     top_tasks_df = get_top_task_per_person(df)
 
@@ -904,17 +991,30 @@ def render_top_tasks_table(df: pd.DataFrame):
         st.info("Brak danych do wyświetlenia")
         return
 
+    # Normalizacja score po etacie — w tle, bez widocznych kolumn FTE
+    person_total_hours = df.groupby("person")["time_hours"].sum()
+    fte_map = estimate_fte(person_total_hours)
+    part_time_people = [p for p, v in fte_map.items() if v["is_part_time"]]
+
+    top_tasks_df = top_tasks_df.copy()
+    top_tasks_df["fte_ratio"] = top_tasks_df["person"].map(
+        lambda p: fte_map.get(p, {}).get("fte_ratio", 1.0)
+    )
+    top_tasks_df["score_normalized"] = (
+        top_tasks_df["total_score"] / top_tasks_df["fte_ratio"]
+    )
+
+    top_tasks_df_sorted = top_tasks_df.sort_values("score_normalized", ascending=False)
+
     # Formatuj do wyświetlenia
-    display_df = format_display_table(top_tasks_df)
-    if "contribution_pct" in display_df.columns:
-        display_df["contribution_pct"] = display_df["contribution_pct"].apply(
-            lambda x: f"{x:.0f}%" if x and x > 0 else "—"
-        )
+    display_df = format_display_table(top_tasks_df_sorted)
+    display_df["score_normalized"] = top_tasks_df_sorted["score_normalized"].apply(
+        lambda x: f"{x:.1f}"
+    )
 
     display_cols = [
         "person",
-        "total_score",
-        "contribution_pct",
+        "score_normalized",
         "task",
         "key",
         "time_hours",
@@ -925,8 +1025,7 @@ def render_top_tasks_table(df: pd.DataFrame):
     ]
     display_names = [
         "👤 Osoba",
-        "🏆 Total Score",
-        "🎯 Udział w Total",
+        "🏆 Creative Score",
         "📋 Najlepsze zadanie",
         "🔑 Klucz",
         "⏰ Czas",
@@ -944,39 +1043,38 @@ def render_top_tasks_table(df: pd.DataFrame):
         width="stretch",
     )
 
-    st.caption(
-        "**Jak czytać tabelę:**\n\n"
-        "- **Total Score** = suma score'ów ze wszystkich zadań osoby (używana do rankingu) — identyczna wartość jak w Top Performer\n"
-        "- **Score zadania** = creative_hours × creative_% / 100 dla tego konkretnego zadania\n"
-        "- Tabela pokazuje najlepsze pojedyncze zadanie każdej osoby, ale ranking jest według Total Score"
-    )
+    _caption = "**Creative Score** = suma (creative_hours × creative_% / 100) ze wszystkich zadań."
+    if part_time_people:
+        _fte_labels = ", ".join(
+            f"{p} (~{fte_map[p]['fte_label']} etatu)" for p in part_time_people
+        )
+        _caption += f" Wynik wyrównany proporcjonalnie do pełnego etatu: {_fte_labels}."
+    st.caption(_caption)
 
-    # Wykres - zachowaj kolejność rankingu
+    # Wykres
     fig = px.bar(
-        top_tasks_df,
-        x="total_score",
+        top_tasks_df_sorted,
+        x="score_normalized",
         y="person",
         orientation="h",
-        title="Total Creative Score — suma ze wszystkich zadań osoby",
-        labels={"total_score": "Total Score", "person": "Osoba"},
-        color="total_score",
+        title="Ranking Creative Score",
+        labels={"score_normalized": "Creative Score", "person": "Osoba"},
+        color="score_normalized",
         color_continuous_scale="Plasma",
         hover_data={
+            "score_normalized": ":.1f",
             "total_score": ":.1f",
-            "score": ":.2f",
             "time_hours": True,
             "creative_hours": True,
             "creative_percent": True,
         },
-        category_orders={
-            "person": top_tasks_df["person"].tolist()
-        },  # Zachowaj kolejność rankingu
+        category_orders={"person": top_tasks_df_sorted["person"].tolist()},
     )
     fig.update_layout(
-        height=max(CHART_MIN_HEIGHT, len(top_tasks_df) * CHART_ROW_HEIGHT),
-        xaxis_title="Total Creative Score (suma wszystkich zadań)",
+        height=max(CHART_MIN_HEIGHT, len(top_tasks_df_sorted) * CHART_ROW_HEIGHT),
+        xaxis_title="Creative Score",
         yaxis_title="",
-        coloraxis_colorbar_title="Total Score",
+        coloraxis_colorbar_title="Score",
     )
     st.plotly_chart(fig, width="stretch")
 
