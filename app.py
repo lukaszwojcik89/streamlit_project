@@ -592,7 +592,9 @@ def render_sidebar():
     return worklogs_file, uploaded_file, excluded_people, selected_month
 
 
-def render_metrics(df: pd.DataFrame, selected_month: str = "Wszystkie"):
+def render_metrics(
+    df: pd.DataFrame, selected_month: str = "Wszystkie", excluded_count: int = 0
+):
     """Renderuje główne metryki na górze strony."""
     col1, col2, col3, col4 = st.columns(4)
 
@@ -611,15 +613,20 @@ def render_metrics(df: pd.DataFrame, selected_month: str = "Wszystkie"):
         st.metric("🎨 Zadania z %", creative_tasks)
 
     # Pokaż zakres danych gdy wybrano "Wszystkie"
+    caption_parts = []
     if selected_month == "Wszystkie" and "month_str" in df.columns:
         months_in_df = sorted(df["month_str"].dropna().unique())
         if len(months_in_df) > 1:
-            st.caption(
+            caption_parts.append(
                 f"📅 Dane zbiorcze za {len(months_in_df)} miesięcy: "
                 f"{months_in_df[0]} – {months_in_df[-1]}"
             )
         elif len(months_in_df) == 1:
-            st.caption(f"📅 Dane za: {months_in_df[0]}")
+            caption_parts.append(f"📅 Dane za: {months_in_df[0]}")
+    if excluded_count > 0:
+        caption_parts.append(f"{excluded_count} os. wykluczone z sidebara")
+    if caption_parts:
+        st.caption(" · ".join(caption_parts))
 
 
 def _render_ai_observation_tiles(text: str):
@@ -2517,8 +2524,10 @@ def main():
         if selected_month != "Wszystkie" and "month_str" in df_processed.columns:
             df_processed = df_processed[df_processed["month_str"] == selected_month]
 
-        # METRYKI (zawsze widoczne) - WSZYSTKIE OSOBY (bez filtra miesiąca)
-        render_metrics(df_processed_full, selected_month)
+        # METRYKI (zawsze widoczne) - zgodne z dashboardem
+        render_metrics(
+            df_processed, selected_month, excluded_count=len(excluded_people)
+        )
         st.markdown("---")
 
         # TABS - porządek: Dashboard → Worklogs (jeśli dostępne) → Personal Dashboard → Pomoc
