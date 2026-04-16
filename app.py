@@ -5,10 +5,13 @@ Przetwarza raporty z Jiry (hierarchiczna struktura Level 0/1/2) i worklogs,
 oblicza Creative Score oraz eksportuje dane.
 """
 
+import os
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from dotenv import load_dotenv
 
 from helpers import (
     parse_time_to_hours,
@@ -36,6 +39,8 @@ from config import (
     CHART_MIN_HEIGHT,
     CHART_ROW_HEIGHT,
 )
+
+load_dotenv()
 
 # =============================================================================
 # KONFIGURACJA STREAMLIT
